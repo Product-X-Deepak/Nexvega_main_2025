@@ -1,39 +1,22 @@
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { UserRole } from '@/types';
 
 interface AuthContextType {
   user: any | null;
-  userRole: UserRole | null;
+  userRole: string | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<any>;
   signOut: () => Promise<any>;
-  hasPermission: (requiredRoles: UserRole[]) => boolean;
+  hasPermission: (requiredRoles: string[]) => boolean;
   isAdmin: () => boolean;
   isStaff: () => boolean;
   isClient: () => boolean;
 }
 
-export const AuthContext = createContext<AuthContextType>({
-  user: null,
-  userRole: null,
-  loading: true,
-  signIn: async () => ({ data: null, error: 'Not implemented' }),
-  signOut: async () => ({ error: 'Not implemented' }),
-  hasPermission: () => false,
-  isAdmin: () => false,
-  isStaff: () => false,
-  isClient: () => false,
-});
-
-interface AuthProviderProps {
-  children: ReactNode;
-}
-
-export function AuthProvider({ children }: AuthProviderProps) {
+export function useProvideAuth() {
   const [user, setUser] = useState<any | null>(null);
-  const [userRole, setUserRole] = useState<UserRole | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const getUserProfile = async (userId: string) => {
@@ -133,7 +116,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
   }, []);
 
-  const hasPermission = (requiredRoles: UserRole[]) => {
+  const hasPermission = (requiredRoles: string[]) => {
     if (!userRole) return false;
     return requiredRoles.includes(userRole);
   };
@@ -142,7 +125,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const isStaff = () => userRole === 'staff';
   const isClient = () => userRole === 'client';
 
-  const value = {
+  return {
     user,
     userRole,
     loading,
@@ -153,8 +136,30 @@ export function AuthProvider({ children }: AuthProviderProps) {
     isStaff,
     isClient,
   };
-  
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-export const useAuth = () => useContext(AuthContext);
+export function useAuth() {
+  return useContext(AuthContext);
+}
+
+export const AuthContext = createContext<AuthContextType>({
+  user: null,
+  userRole: null,
+  loading: true,
+  signIn: async () => ({ data: null, error: 'Not implemented' }),
+  signOut: async () => ({ error: 'Not implemented' }),
+  hasPermission: () => false,
+  isAdmin: () => false,
+  isStaff: () => false,
+  isClient: () => false,
+});
+
+interface AuthProviderProps {
+  children: ReactNode;
+}
+
+export function AuthProvider({ children }: AuthProviderProps) {
+  const auth = useProvideAuth();
+  
+  return <AuthContext.Provider value={auth}>{children}</AuthContext.Provider>;
+}

@@ -3,15 +3,15 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import ClientLayout from '@/components/layout/ClientLayout';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
-import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
-import { Candidate } from '@/types';
 import { Textarea } from '@/components/ui/textarea';
-import { HeartIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
+import { Candidate } from '@/types';
+import { DocumentTextIcon, BriefcaseIcon, AcademicCapIcon, ClockIcon } from '@heroicons/react/24/outline';
 
 export default function ClientCandidateDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -19,57 +19,52 @@ export default function ClientCandidateDetailPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [candidate, setCandidate] = useState<Candidate | null>(null);
-  const [isLiked, setIsLiked] = useState(false);
-  const [isRejecting, setIsRejecting] = useState(false);
-  const [rejectionReason, setRejectionReason] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLiked, setIsLiked] = useState(false);
+  const [feedback, setFeedback] = useState('');
+  const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [isSubmittingRejection, setIsSubmittingRejection] = useState(false);
 
   useEffect(() => {
     if (id) {
       fetchCandidate(id);
-      checkIfCandidateLiked(id);
+      checkIfLiked(id);
     }
-  }, [id, user?.id]);
+  }, [id]);
 
   const fetchCandidate = async (candidateId: string) => {
     try {
       setIsLoading(true);
       
-      // Get only the permitted fields for clients
       const { data, error } = await supabase
         .from('candidates')
-        .select('id, skills, resume_summary, education, experience, languages, projects, publications, pipeline_stage')
+        .select('skills, resume_summary, education, experience, projects, languages, pipeline_stage')
         .eq('id', candidateId)
         .single();
         
       if (error) throw error;
       
-      // Check if this candidate is assigned to this client
-      const { data: clientData, error: clientError } = await supabase
-        .from('clients')
-        .select('assigned_candidates')
-        .eq('id', user?.id)
-        .single();
-        
-      if (clientError) throw clientError;
-      
-      if (!clientData.assigned_candidates?.includes(candidateId)) {
-        toast({
-          title: 'Access denied',
-          description: 'You do not have permission to view this candidate',
-          variant: 'destructive',
-        });
-        navigate('/client/candidates');
-        return;
-      }
-      
-      setCandidate(data as Candidate);
+      // Store only non-confidential data
+      setCandidate({
+        id: candidateId,
+        skills: data.skills,
+        resume_summary: data.resume_summary,
+        education: data.education,
+        experience: data.experience,
+        projects: data.projects,
+        languages: data.languages,
+        pipeline_stage: data.pipeline_stage,
+        // Add placeholders for required fields
+        status: 'active',
+        created_at: '',
+        updated_at: ''
+      });
     } catch (error) {
       console.error('Error fetching candidate:', error);
       toast({
         title: 'Error',
-        description: 'Failed to load candidate profile',
+        description: 'Failed to load candidate details',
         variant: 'destructive',
       });
       navigate('/client/candidates');
@@ -78,7 +73,7 @@ export default function ClientCandidateDetailPage() {
     }
   };
 
-  const checkIfCandidateLiked = async (candidateId: string) => {
+  const checkIfLiked = async (candidateId: string) => {
     try {
       const { data, error } = await supabase
         .from('clients')
@@ -88,19 +83,16 @@ export default function ClientCandidateDetailPage() {
         
       if (error) throw error;
       
-      setIsLiked(data.liked_candidates?.includes(candidateId) || false);
+      const liked = data.liked_candidates?.includes(candidateId) || false;
+      setIsLiked(liked);
     } catch (error) {
-      console.error('Error checking if candidate is liked:', error);
+      console.error('Error checking liked status:', error);
     }
   };
 
   const handleLikeToggle = async () => {
     try {
-      if (!candidate) return;
-      
-      setIsSubmitting(true);
-      
-      // Get current liked candidates
+      // First get the client's current liked candidates
       const { data, error } = await supabase
         .from('clients')
         .select('liked_candidates')
@@ -113,11 +105,11 @@ export default function ClientCandidateDetailPage() {
       
       // Update the liked status
       if (!isLiked) {
-        if (!updatedLikes.includes(candidate.id)) {
-          updatedLikes.push(candidate.id);
+        if (!updatedLikes.includes(id!)) {
+          updatedLikes.push(id!);
         }
       } else {
-        updatedLikes = updatedLikes.filter(id => id !== candidate.id);
+        updatedLikes = updatedLikes.filter(candidateId => candidateId !== id);
       }
       
       // Update in the database
@@ -128,7 +120,6 @@ export default function ClientCandidateDetailPage() {
         
       if (updateError) throw updateError;
       
-      // Update local state
       setIsLiked(!isLiked);
       
       toast({
@@ -138,36 +129,76 @@ export default function ClientCandidateDetailPage() {
           : 'You have removed your like for this candidate.',
       });
     } catch (error) {
-      console.error('Error toggling like status:', error);
+      console.error('Error updating like status:', error);
       toast({
         title: 'Error',
         description: 'Failed to update candidate preference',
         variant: 'destructive',
       });
+    }
+  };
+
+  const handleSubmitFeedback = async () => {
+    if (!feedback.trim()) {
+      toast({
+        title: 'Error',
+        description: 'Please enter feedback before submitting',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    try {
+      setIsSubmittingFeedback(true);
+      
+      const { error } = await supabase
+        .from('candidate_notes')
+        .insert({
+          candidate_id: id,
+          user_id: user?.id,
+          content: feedback,
+          type: 'feedback',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
+        
+      if (error) throw error;
+      
+      toast({
+        title: 'Feedback Submitted',
+        description: 'Thank you for providing feedback on this candidate',
+      });
+      
+      setFeedback('');
+    } catch (error) {
+      console.error('Error submitting feedback:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to submit feedback',
+        variant: 'destructive',
+      });
     } finally {
-      setIsSubmitting(false);
+      setIsSubmittingFeedback(false);
     }
   };
 
   const handleReject = async () => {
+    if (!rejectionReason.trim()) {
+      toast({
+        title: 'Error',
+        description: 'Please provide a reason for rejection',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
     try {
-      if (!candidate) return;
-      if (!rejectionReason.trim()) {
-        toast({
-          title: 'Reason required',
-          description: 'Please provide a reason for rejection',
-          variant: 'destructive',
-        });
-        return;
-      }
+      setIsSubmittingRejection(true);
       
-      setIsSubmitting(true);
-      
-      // Add rejection reason
       const { error } = await supabase
         .from('rejection_reasons')
         .insert({
-          candidate_id: candidate.id,
+          candidate_id: id,
           client_id: user?.id,
           reason: rejectionReason,
           created_at: new Date().toISOString()
@@ -175,37 +206,19 @@ export default function ClientCandidateDetailPage() {
         
       if (error) throw error;
       
-      // If candidate was liked, remove from liked candidates
+      // If liked, remove from liked candidates
       if (isLiked) {
-        const { data, error: fetchError } = await supabase
-          .from('clients')
-          .select('liked_candidates')
-          .eq('id', user?.id)
-          .single();
-          
-        if (fetchError) throw fetchError;
-        
-        const updatedLikes = (data.liked_candidates || []).filter(id => id !== candidate.id);
-        
-        const { error: updateError } = await supabase
-          .from('clients')
-          .update({ liked_candidates: updatedLikes })
-          .eq('id', user?.id);
-          
-        if (updateError) throw updateError;
-        
-        setIsLiked(false);
+        await handleLikeToggle();
       }
       
       toast({
         title: 'Candidate Rejected',
-        description: 'Your feedback has been submitted successfully',
+        description: 'Thank you for providing feedback. Your recruiter will be notified.',
       });
       
       setRejectionReason('');
-      setIsRejecting(false);
       
-      // Redirect back to candidates list
+      // Navigate back to candidates list after a delay
       setTimeout(() => {
         navigate('/client/candidates');
       }, 1500);
@@ -213,18 +226,18 @@ export default function ClientCandidateDetailPage() {
       console.error('Error rejecting candidate:', error);
       toast({
         title: 'Error',
-        description: 'Failed to submit rejection feedback',
+        description: 'Failed to submit rejection',
         variant: 'destructive',
       });
     } finally {
-      setIsSubmitting(false);
+      setIsSubmittingRejection(false);
     }
   };
 
   if (isLoading) {
     return (
       <ClientLayout>
-        <div className="animate-pulse space-y-5">
+        <div className="animate-pulse space-y-6">
           <div className="h-8 w-64 bg-gray-200 rounded"></div>
           <div className="h-4 w-96 bg-gray-200 rounded"></div>
           <div className="h-80 bg-gray-200 rounded"></div>
@@ -238,7 +251,7 @@ export default function ClientCandidateDetailPage() {
       <ClientLayout>
         <div className="flex flex-col items-center justify-center py-12">
           <h2 className="text-2xl font-bold">Candidate Not Found</h2>
-          <p className="mt-2 text-muted-foreground">The candidate you are looking for does not exist or is not assigned to you.</p>
+          <p className="mt-2 text-muted-foreground">The candidate you are looking for does not exist or has been removed.</p>
           <Button className="mt-4" onClick={() => navigate('/client/candidates')}>
             Back to Candidates
           </Button>
@@ -252,11 +265,14 @@ export default function ClientCandidateDetailPage() {
       <div className="flex flex-col gap-5">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">
-              Candidate Profile
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold tracking-tight">
+                Candidate Profile
+              </h1>
+              <Badge variant="outline">{getPipelineStageLabel(candidate.pipeline_stage)}</Badge>
+            </div>
             <p className="text-muted-foreground">
-              Review candidate details and provide feedback
+              Candidate details and information
             </p>
           </div>
           
@@ -264,95 +280,48 @@ export default function ClientCandidateDetailPage() {
             <Button
               variant={isLiked ? "outline" : "default"}
               onClick={handleLikeToggle}
-              disabled={isSubmitting}
               className={isLiked ? "border-red-500 text-red-500" : ""}
             >
-              <HeartIcon className={`h-4 w-4 mr-2 ${isLiked ? "fill-red-500" : ""}`} />
-              {isLiked ? 'Remove Interest' : 'Express Interest'}
+              {isLiked ? 'Remove Like' : 'Like Candidate'}
             </Button>
-            
-            {!isRejecting && (
-              <Button
-                variant="outline"
-                onClick={() => setIsRejecting(true)}
-                disabled={isSubmitting}
-              >
-                <XMarkIcon className="h-4 w-4 mr-2" />
-                Not Suitable
-              </Button>
-            )}
           </div>
         </div>
 
-        {isRejecting ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>Provide Feedback</CardTitle>
-              <CardDescription>
-                Please tell us why this candidate is not suitable for your requirements
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Textarea
-                placeholder="Please provide detailed feedback..."
-                value={rejectionReason}
-                onChange={(e) => setRejectionReason(e.target.value)}
-                className="min-h-[150px]"
-              />
-            </CardContent>
-            <CardFooter className="flex justify-between">
-              <Button
-                variant="outline"
-                onClick={() => setIsRejecting(false)}
-                disabled={isSubmitting}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="default"
-                onClick={handleReject}
-                disabled={isSubmitting || !rejectionReason.trim()}
-              >
-                {isSubmitting ? 'Submitting...' : 'Submit Feedback'}
-              </Button>
-            </CardFooter>
-          </Card>
-        ) : (
-          <Tabs defaultValue="summary" className="w-full">
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="summary">Summary</TabsTrigger>
-              <TabsTrigger value="experience">Experience</TabsTrigger>
-              <TabsTrigger value="education">Education</TabsTrigger>
-              <TabsTrigger value="projects">Projects</TabsTrigger>
-            </TabsList>
+        <Tabs defaultValue="profile" className="w-full">
+          <TabsList className="grid w-full md:w-auto md:inline-grid grid-cols-2 md:grid-cols-3">
+            <TabsTrigger value="profile">Profile</TabsTrigger>
+            <TabsTrigger value="experience">Experience</TabsTrigger>
+            <TabsTrigger value="feedback">Provide Feedback</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="profile" className="space-y-4 mt-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Professional Summary</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="whitespace-pre-wrap">{candidate.resume_summary || 'No summary available'}</p>
+              </CardContent>
+            </Card>
             
-            <TabsContent value="summary" className="space-y-4 mt-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Professional Summary</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="whitespace-pre-wrap">{candidate.resume_summary || 'No summary available'}</p>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardHeader>
-                  <CardTitle>Skills & Expertise</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {candidate.skills && candidate.skills.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {candidate.skills.map((skill, index) => (
-                        <Badge key={index} variant="secondary">{skill}</Badge>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-muted-foreground">No skills listed</p>
-                  )}
-                </CardContent>
-              </Card>
-              
+            <Card>
+              <CardHeader>
+                <CardTitle>Skills & Expertise</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {candidate.skills && candidate.skills.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {candidate.skills.map((skill, index) => (
+                      <Badge key={index} variant="secondary">{skill}</Badge>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground">No skills listed</p>
+                )}
+              </CardContent>
+            </Card>
+            
+            <div className="grid md:grid-cols-2 gap-4">
               <Card>
                 <CardHeader>
                   <CardTitle>Languages</CardTitle>
@@ -369,166 +338,205 @@ export default function ClientCandidateDetailPage() {
                   )}
                 </CardContent>
               </Card>
-            </TabsContent>
-            
-            <TabsContent value="experience" className="space-y-4 mt-4">
-              {candidate.experience && candidate.experience.length > 0 ? (
-                candidate.experience.map((exp, index) => (
-                  <Card key={index}>
-                    <CardHeader>
-                      <CardTitle>{exp.title}</CardTitle>
-                      <CardDescription>
-                        {exp.company} {exp.location ? `• ${exp.location}` : ''}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        <div>
-                          <p className="text-sm text-muted-foreground">
-                            {exp.start_date} - {exp.current ? 'Present' : exp.end_date}
-                          </p>
-                        </div>
-                        
-                        {exp.responsibilities && exp.responsibilities.length > 0 && (
-                          <div>
-                            <h3 className="text-sm font-medium mb-1">Responsibilities</h3>
-                            <ul className="list-disc pl-5 space-y-1">
-                              {exp.responsibilities.map((responsibility, idx) => (
-                                <li key={idx} className="text-sm">{responsibility}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))
-              ) : (
-                <Card>
-                  <CardContent className="py-8">
-                    <p className="text-center text-muted-foreground">No work experience listed</p>
-                  </CardContent>
-                </Card>
-              )}
-            </TabsContent>
-            
-            <TabsContent value="education" className="space-y-4 mt-4">
-              {candidate.education && candidate.education.length > 0 ? (
-                candidate.education.map((edu, index) => (
-                  <Card key={index}>
-                    <CardHeader>
-                      <CardTitle>{edu.degree}</CardTitle>
-                      <CardDescription>{edu.institution}</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-2">
-                        <p className="text-sm text-muted-foreground">
-                          {edu.field_of_study}
-                        </p>
-                        {(edu.start_date || edu.end_date) && (
-                          <p className="text-sm text-muted-foreground">
-                            {edu.start_date} - {edu.end_date}
-                          </p>
-                        )}
-                        {edu.grade && (
-                          <p className="text-sm">
-                            <span className="text-muted-foreground">Grade:</span> {edu.grade}
-                          </p>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))
-              ) : (
-                <Card>
-                  <CardContent className="py-8">
-                    <p className="text-center text-muted-foreground">No education details listed</p>
-                  </CardContent>
-                </Card>
-              )}
-            </TabsContent>
-            
-            <TabsContent value="projects" className="space-y-4 mt-4">
-              {candidate.projects && candidate.projects.length > 0 ? (
-                candidate.projects.map((project, index) => (
-                  <Card key={index}>
-                    <CardHeader>
-                      <CardTitle>{project.name}</CardTitle>
-                      {(project.start_date || project.end_date) && (
-                        <CardDescription>
-                          {project.start_date} - {project.end_date || 'Present'}
-                        </CardDescription>
-                      )}
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        {project.description && (
-                          <p>{project.description}</p>
-                        )}
-                        
-                        {project.technologies && project.technologies.length > 0 && (
-                          <div>
-                            <h3 className="text-sm font-medium mb-1">Technologies</h3>
-                            <div className="flex flex-wrap gap-2">
-                              {project.technologies.map((tech, idx) => (
-                                <Badge key={idx} variant="outline">{tech}</Badge>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                        
-                        {project.url && (
-                          <div>
-                            <h3 className="text-sm font-medium mb-1">Project URL</h3>
-                            <a 
-                              href="#" 
-                              onClick={(e) => e.preventDefault()}
-                              className="text-blue-600 hover:underline disabled-link"
-                            >
-                              View Project (Contact recruiter for access)
-                            </a>
-                          </div>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))
-              ) : (
-                <Card>
-                  <CardContent className="py-8">
-                    <p className="text-center text-muted-foreground">No projects listed</p>
-                  </CardContent>
-                </Card>
-              )}
               
-              {candidate.publications && candidate.publications.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Publications</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      {candidate.publications.map((pub, index) => (
-                        <div key={index} className="border-b pb-4 last:border-0 last:pb-0">
-                          <h3 className="font-medium">{pub.title}</h3>
-                          {pub.publisher && (
-                            <p className="text-sm text-muted-foreground">
-                              {pub.publisher} {pub.date ? `• ${pub.date}` : ''}
-                            </p>
-                          )}
-                          {pub.description && (
-                            <p className="text-sm mt-2">{pub.description}</p>
-                          )}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Education</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {candidate.education && candidate.education.length > 0 ? (
+                    <div className="space-y-3">
+                      {candidate.education.map((edu, index) => (
+                        <div key={index} className="flex gap-3">
+                          <AcademicCapIcon className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-1" />
+                          <div>
+                            <p className="font-medium">{edu.degree} in {edu.field_of_study}</p>
+                            <p className="text-sm">{edu.institution}</p>
+                            {edu.start_date && (
+                              <p className="text-xs text-muted-foreground">
+                                {edu.start_date} - {edu.end_date || 'Present'}
+                              </p>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
-                  </CardContent>
-                </Card>
-              )}
-            </TabsContent>
-          </Tabs>
-        )}
+                  ) : (
+                    <p className="text-muted-foreground">No education history listed</p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="experience" className="space-y-4 mt-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Work Experience</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {candidate.experience && candidate.experience.length > 0 ? (
+                  <div className="space-y-6">
+                    {candidate.experience.map((exp, index) => (
+                      <div key={index} className="flex gap-3">
+                        <BriefcaseIcon className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-1" />
+                        <div>
+                          <p className="font-medium">{exp.title}</p>
+                          <p className="text-sm">{exp.company} {exp.location ? `• ${exp.location}` : ''}</p>
+                          {exp.start_date && (
+                            <p className="text-sm text-muted-foreground">
+                              {exp.start_date} - {exp.current ? 'Present' : (exp.end_date || '')}
+                            </p>
+                          )}
+                          {exp.responsibilities && exp.responsibilities.length > 0 && (
+                            <ul className="mt-2 list-disc pl-4 space-y-1 text-sm">
+                              {exp.responsibilities.map((resp, i) => (
+                                <li key={i}>{resp}</li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground">No work experience listed</p>
+                )}
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader>
+                <CardTitle>Projects</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {candidate.projects && candidate.projects.length > 0 ? (
+                  <div className="space-y-4">
+                    {candidate.projects.map((project, index) => (
+                      <div key={index} className="flex gap-3">
+                        <DocumentTextIcon className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-1" />
+                        <div>
+                          <p className="font-medium">
+                            {project.name}
+                            {project.url && (
+                              <a href={project.url} target="_blank" rel="noopener noreferrer" className="ml-2 text-sm text-blue-600 hover:underline">
+                                View Project
+                              </a>
+                            )}
+                          </p>
+                          {project.description && (
+                            <p className="text-sm mt-1">{project.description}</p>
+                          )}
+                          {project.technologies && project.technologies.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              {project.technologies.map((tech, i) => (
+                                <Badge key={i} variant="outline" className="text-xs">{tech}</Badge>
+                              ))}
+                            </div>
+                          )}
+                          {project.start_date && (
+                            <div className="flex items-center mt-2 text-xs text-muted-foreground">
+                              <ClockIcon className="h-3 w-3 mr-1" />
+                              <span>{project.start_date} - {project.end_date || 'Present'}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground">No projects listed</p>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+          
+          <TabsContent value="feedback" className="space-y-4 mt-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Provide Feedback</CardTitle>
+                <CardDescription>
+                  Let us know what you think about this candidate
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label htmlFor="feedback" className="block font-medium">Your Feedback</label>
+                    <Textarea 
+                      id="feedback"
+                      placeholder="Please share your thoughts on this candidate's qualifications, fit for your organization, etc."
+                      rows={5}
+                      value={feedback}
+                      onChange={(e) => setFeedback(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex justify-end">
+                    <Button 
+                      onClick={handleSubmitFeedback}
+                      disabled={!feedback.trim() || isSubmittingFeedback}
+                    >
+                      {isSubmittingFeedback ? 'Submitting...' : 'Submit Feedback'}
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader>
+                <CardTitle>Reject Candidate</CardTitle>
+                <CardDescription>
+                  If this candidate is not a good fit, please let us know why
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label htmlFor="rejection" className="block font-medium">Reason for Rejection</label>
+                    <Textarea 
+                      id="rejection"
+                      placeholder="Please explain why this candidate is not suitable for your needs"
+                      rows={3}
+                      value={rejectionReason}
+                      onChange={(e) => setRejectionReason(e.target.value)}
+                    />
+                  </div>
+                  <Button 
+                    variant="destructive"
+                    onClick={handleReject}
+                    disabled={!rejectionReason.trim() || isSubmittingRejection}
+                  >
+                    {isSubmittingRejection ? 'Submitting...' : 'Reject Candidate'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </ClientLayout>
   );
+}
+
+function getPipelineStageLabel(stage?: string): string {
+  if (!stage) return 'New';
+  
+  const labels: Record<string, string> = {
+    new_candidate: 'New',
+    screening: 'Screening',
+    interview_scheduled: 'Interview Scheduled',
+    interview_completed: 'Interview Completed',
+    technical_assessment: 'Assessment',
+    reference_check: 'Reference Check',
+    offer_pending: 'Offer Pending',
+    offer_sent: 'Offer Sent',
+    offer_accepted: 'Accepted',
+    offer_rejected: 'Rejected',
+    onboarding: 'Onboarding',
+    hired: 'Hired',
+    rejected: 'Rejected'
+  };
+  
+  return labels[stage] || stage;
 }
