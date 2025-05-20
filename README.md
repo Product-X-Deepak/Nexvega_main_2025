@@ -1,73 +1,87 @@
-# Welcome to your Lovable project
 
-## Project info
+# ATS System - Applicant Tracking System
 
-**URL**: https://lovable.dev/projects/e8672ce3-b3f9-4d36-abbd-afebc652a3f1
+## Overview
 
-## How can I edit this code?
+A full-featured Applicant Tracking System (ATS) designed for recruiters, hiring managers, and clients. This system streamlines the recruitment process by providing tools for resume parsing, candidate management, client interaction, and job posting.
 
-There are several ways of editing your application.
+## Features
 
-**Use Lovable**
+- **Role-Based Access Control**: Different permissions for Admins, Staff, and Clients
+- **Resume Parsing**: Automatic extraction of candidate information from various file formats (PDF, DOC, DOCX, CSV, Excel)
+- **AI-Powered Matching**: Find the best candidates for each job using embeddings and similarity search
+- **Candidate Pipeline Management**: Track candidates through each stage of the hiring process
+- **Client Portal**: Secure access for clients to view assigned candidates without revealing sensitive information
+- **ChatGPT Integration**: AI assistants for both admin and staff with different permission levels
+- **Bulk Operations**: Import, export, and manage candidate data in bulk
+- **Analytics Dashboard**: Track recruitment metrics and visualize data
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/e8672ce3-b3f9-4d36-abbd-afebc652a3f1) and start prompting.
+## Tech Stack
 
-Changes made via Lovable will be committed automatically to this repo.
+- **Frontend**: React with TypeScript
+- **UI Framework**: TailwindCSS with shadcn/ui components
+- **Database**: Supabase (PostgreSQL) with pgvector for embedding-based search
+- **Authentication**: Supabase Auth
+- **File Processing**: pdf-parse, mammoth, csv-parser, xlsx
+- **AI Integration**: OpenAI API for text embeddings and resume parsing
+- **Hosting**: Vercel + Supabase
 
-**Use your preferred IDE**
+## User Roles
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### Admin
+- Complete system access including user management
+- Can create, edit, delete and manage all entities
+- Access to all reports and analytics
+- Can configure system settings
+- Can manage permissions and roles
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+### Staff
+- Create and manage candidates
+- Upload and process resumes
+- Create and manage job postings
+- Move candidates through hiring pipelines
+- Add notes and feedback to candidates
 
-Follow these steps:
+### Client
+- View candidates assigned to them (with limited information)
+- Like or reject candidates
+- Provide feedback on candidates
+- View their active job postings
+- Track candidate pipeline progress
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+## Setup and Installation
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+1. Clone this repository
+2. Set up Supabase project and configure tables
+3. Configure environment variables
+4. Install dependencies: `npm install`
+5. Run the development server: `npm run dev`
 
-# Step 3: Install the necessary dependencies.
-npm i
+## Environment Variables
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+The following environment variables are required:
+
+```
+VITE_SUPABASE_URL=your-supabase-url
+VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
+VITE_OPENAI_API_KEY=your-openai-api-key
 ```
 
-**Edit a file directly in GitHub**
+## Database Structure
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+The Supabase database includes the following tables:
 
-**Use GitHub Codespaces**
+- **users**: User accounts with role information
+- **candidates**: Candidate profiles with all extracted resume data
+- **clients**: Client company information
+- **jobs**: Job postings and requirements
+- **candidate_notes**: Notes and feedback for candidates
+- **rejection_reasons**: Reasons provided by clients for rejecting candidates
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Deployment
 
-## What technologies are used for this project?
+This project is configured for deployment on Vercel with Supabase as the backend.
 
-This project is built with:
+## License
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/e8672ce3-b3f9-4d36-abbd-afebc652a3f1) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+Proprietary software. All rights reserved.
