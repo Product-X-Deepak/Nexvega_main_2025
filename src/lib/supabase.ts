@@ -1,4 +1,5 @@
 
+
 import { createClient } from '@supabase/supabase-js';
 
 // These environment variables must be set in deployment environment
@@ -143,7 +144,7 @@ export async function getCurrentUser(): Promise<User | null> {
   if (!user) return null;
   
   const { data } = await supabase
-    .from('users')
+    .from('profiles')
     .select('*')
     .eq('id', user.id)
     .single();
@@ -153,7 +154,7 @@ export async function getCurrentUser(): Promise<User | null> {
 
 export async function getUserRole(userId: string): Promise<UserRole | null> {
   const { data } = await supabase
-    .from('users')
+    .from('profiles')
     .select('role')
     .eq('id', userId)
     .single();
@@ -169,3 +170,4 @@ export async function checkAuthorization(
   if (!userRole) return false;
   return requiredRoles.includes(userRole);
 }
+

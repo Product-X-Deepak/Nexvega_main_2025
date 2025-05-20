@@ -1,4 +1,5 @@
 
+
 import OpenAI from 'openai';
 
 // This will be stored as an environment variable in deployment
@@ -104,3 +105,4 @@ export async function matchJobWithCandidates(jobDescription: string, candidatePr
   const content = response.choices[0].message.content;
   return content ? JSON.parse(content) : null;
 }
+

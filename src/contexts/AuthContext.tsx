@@ -33,7 +33,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         
         if (session) {
           const { data: userData } = await supabase
-            .from('users')
+            .from('profiles')
             .select('*')
             .eq('id', session.user.id)
             .single();
@@ -57,7 +57,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       async (event, session) => {
         if (event === 'SIGNED_IN' && session) {
           const { data: userData } = await supabase
-            .from('users')
+            .from('profiles')
             .select('*')
             .eq('id', session.user.id)
             .single();
@@ -92,7 +92,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Update last_sign_in timestamp
       if (user) {
         await supabase
-          .from('users')
+          .from('profiles')
           .update({ last_sign_in: new Date().toISOString() })
           .eq('id', user.id);
       }

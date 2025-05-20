@@ -1,4 +1,5 @@
 
+
 import * as pdfParse from 'pdf-parse';
 import * as mammoth from 'mammoth';
 import * as csvParser from 'csv-parser';
@@ -157,3 +158,4 @@ export async function saveProcessedCandidateToDatabase(candidateData: any) {
   
   return true;
 }
+
