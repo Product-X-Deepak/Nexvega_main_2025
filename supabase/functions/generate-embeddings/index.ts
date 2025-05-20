@@ -52,6 +52,7 @@ serve(async (req) => {
 
     // Update the record with the embedding
     let updateResult;
+    
     if (recordType === 'candidate') {
       updateResult = await supabase
         .from('candidates')
@@ -65,15 +66,15 @@ serve(async (req) => {
     } else {
       throw new Error(`Unsupported record type: ${recordType}`);
     }
-
+    
     if (updateResult.error) {
-      throw updateResult.error;
+      throw new Error(`Failed to update ${recordType}: ${updateResult.error.message}`);
     }
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Embedding generated and saved for ${recordType} ${recordId}`,
+        message: `Successfully generated and saved embedding for ${recordType} ${recordId}`,
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

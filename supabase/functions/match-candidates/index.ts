@@ -21,7 +21,7 @@ serve(async (req) => {
   }
 
   try {
-    const { jobId, limit = 20 } = await req.json();
+    const { jobId, limit = 20, saveResults = true } = await req.json();
     
     if (!jobId) {
       return new Response(
@@ -59,20 +59,24 @@ serve(async (req) => {
     if (candidatesError) {
       throw new Error(`Candidate matching failed: ${candidatesError.message}`);
     }
-    
-    // Store the results in the search_results table
-    const { error: saveError } = await supabase
-      .from('search_results')
-      .insert({
-        job_id: jobId,
-        candidate_ids: candidates.map(c => c.id),
-        scores: candidates.map(c => c.similarity),
-        created_at: new Date().toISOString(),
-        created_by: req.headers.get('x-auth-user-id')
-      });
+
+    // Save the match results if requested
+    if (saveResults && candidates.length > 0) {
+      const candidateIds = candidates.map((c: any) => c.id);
+      const scores = candidates.map((c: any) => c.similarity);
       
-    if (saveError) {
-      throw new Error(`Failed to save search results: ${saveError.message}`);
+      const { error: saveError } = await supabase
+        .from('search_results')
+        .insert({
+          job_id: jobId,
+          candidate_ids: candidateIds,
+          scores: scores,
+          created_by: req.headers.get('x-user-id') || null
+        });
+        
+      if (saveError) {
+        console.error('Error saving search results:', saveError.message);
+      }
     }
 
     return new Response(

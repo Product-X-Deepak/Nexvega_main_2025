@@ -2,16 +2,15 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import ClientLayout from '@/components/layout/ClientLayout';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
 import { Candidate } from '@/types';
-import { DocumentTextIcon, BriefcaseIcon, AcademicCapIcon, ClockIcon } from '@heroicons/react/24/outline';
 
 export default function ClientCandidateDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -19,12 +18,10 @@ export default function ClientCandidateDetailPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [candidate, setCandidate] = useState<Candidate | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [isLiked, setIsLiked] = useState(false);
   const [feedback, setFeedback] = useState('');
-  const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
-  const [rejectionReason, setRejectionReason] = useState('');
-  const [isSubmittingRejection, setIsSubmittingRejection] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -39,27 +36,13 @@ export default function ClientCandidateDetailPage() {
       
       const { data, error } = await supabase
         .from('candidates')
-        .select('skills, resume_summary, education, experience, projects, languages, pipeline_stage')
+        .select('*')
         .eq('id', candidateId)
         .single();
         
       if (error) throw error;
       
-      // Store only non-confidential data
-      setCandidate({
-        id: candidateId,
-        skills: data.skills,
-        resume_summary: data.resume_summary,
-        education: data.education,
-        experience: data.experience,
-        projects: data.projects,
-        languages: data.languages,
-        pipeline_stage: data.pipeline_stage,
-        // Add placeholders for required fields
-        status: 'active',
-        created_at: '',
-        updated_at: ''
-      });
+      setCandidate(data as Candidate);
     } catch (error) {
       console.error('Error fetching candidate:', error);
       toast({
@@ -83,14 +66,13 @@ export default function ClientCandidateDetailPage() {
         
       if (error) throw error;
       
-      const liked = data.liked_candidates?.includes(candidateId) || false;
-      setIsLiked(liked);
+      setIsLiked(data.liked_candidates?.includes(candidateId) || false);
     } catch (error) {
-      console.error('Error checking liked status:', error);
+      console.error('Error checking if candidate is liked:', error);
     }
   };
 
-  const handleLikeToggle = async () => {
+  const handleLike = async () => {
     try {
       // First get the client's current liked candidates
       const { data, error } = await supabase
@@ -103,13 +85,14 @@ export default function ClientCandidateDetailPage() {
       
       let updatedLikes = [...(data.liked_candidates || [])];
       
-      // Update the liked status
-      if (!isLiked) {
+      if (isLiked) {
+        // Remove from liked
+        updatedLikes = updatedLikes.filter(likeId => likeId !== id);
+      } else {
+        // Add to liked
         if (!updatedLikes.includes(id!)) {
           updatedLikes.push(id!);
         }
-      } else {
-        updatedLikes = updatedLikes.filter(candidateId => candidateId !== id);
       }
       
       // Update in the database
@@ -123,10 +106,10 @@ export default function ClientCandidateDetailPage() {
       setIsLiked(!isLiked);
       
       toast({
-        title: !isLiked ? 'Candidate Liked' : 'Like Removed',
-        description: !isLiked
-          ? 'You have liked this candidate. Recruiter will contact you.'
-          : 'You have removed your like for this candidate.',
+        title: isLiked ? 'Removed from Liked' : 'Added to Liked',
+        description: isLiked
+          ? 'This candidate has been removed from your liked candidates.'
+          : 'This candidate has been added to your liked candidates. Our team will be in touch!',
       });
     } catch (error) {
       console.error('Error updating like status:', error);
@@ -141,16 +124,16 @@ export default function ClientCandidateDetailPage() {
   const handleSubmitFeedback = async () => {
     if (!feedback.trim()) {
       toast({
-        title: 'Error',
-        description: 'Please enter feedback before submitting',
+        title: 'Empty Feedback',
+        description: 'Please provide feedback before submitting',
         variant: 'destructive',
       });
       return;
     }
     
+    setIsSubmitting(true);
+    
     try {
-      setIsSubmittingFeedback(true);
-      
       const { error } = await supabase
         .from('candidate_notes')
         .insert({
@@ -158,15 +141,13 @@ export default function ClientCandidateDetailPage() {
           user_id: user?.id,
           content: feedback,
           type: 'feedback',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
         });
         
       if (error) throw error;
       
       toast({
         title: 'Feedback Submitted',
-        description: 'Thank you for providing feedback on this candidate',
+        description: 'Thank you for your feedback!',
       });
       
       setFeedback('');
@@ -174,70 +155,18 @@ export default function ClientCandidateDetailPage() {
       console.error('Error submitting feedback:', error);
       toast({
         title: 'Error',
-        description: 'Failed to submit feedback',
+        description: 'Failed to submit feedback. Please try again.',
         variant: 'destructive',
       });
     } finally {
-      setIsSubmittingFeedback(false);
-    }
-  };
-
-  const handleReject = async () => {
-    if (!rejectionReason.trim()) {
-      toast({
-        title: 'Error',
-        description: 'Please provide a reason for rejection',
-        variant: 'destructive',
-      });
-      return;
-    }
-    
-    try {
-      setIsSubmittingRejection(true);
-      
-      const { error } = await supabase
-        .from('rejection_reasons')
-        .insert({
-          candidate_id: id,
-          client_id: user?.id,
-          reason: rejectionReason,
-          created_at: new Date().toISOString()
-        });
-        
-      if (error) throw error;
-      
-      // If liked, remove from liked candidates
-      if (isLiked) {
-        await handleLikeToggle();
-      }
-      
-      toast({
-        title: 'Candidate Rejected',
-        description: 'Thank you for providing feedback. Your recruiter will be notified.',
-      });
-      
-      setRejectionReason('');
-      
-      // Navigate back to candidates list after a delay
-      setTimeout(() => {
-        navigate('/client/candidates');
-      }, 1500);
-    } catch (error) {
-      console.error('Error rejecting candidate:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to submit rejection',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsSubmittingRejection(false);
+      setIsSubmitting(false);
     }
   };
 
   if (isLoading) {
     return (
       <ClientLayout>
-        <div className="animate-pulse space-y-6">
+        <div className="animate-pulse space-y-5">
           <div className="h-8 w-64 bg-gray-200 rounded"></div>
           <div className="h-4 w-96 bg-gray-200 rounded"></div>
           <div className="h-80 bg-gray-200 rounded"></div>
@@ -251,7 +180,9 @@ export default function ClientCandidateDetailPage() {
       <ClientLayout>
         <div className="flex flex-col items-center justify-center py-12">
           <h2 className="text-2xl font-bold">Candidate Not Found</h2>
-          <p className="mt-2 text-muted-foreground">The candidate you are looking for does not exist or has been removed.</p>
+          <p className="mt-2 text-muted-foreground">
+            This candidate profile is not available or may have been removed.
+          </p>
           <Button className="mt-4" onClick={() => navigate('/client/candidates')}>
             Back to Candidates
           </Button>
@@ -265,30 +196,30 @@ export default function ClientCandidateDetailPage() {
       <div className="flex flex-col gap-5">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold tracking-tight">
-                Candidate Profile
-              </h1>
-              <Badge variant="outline">{getPipelineStageLabel(candidate.pipeline_stage)}</Badge>
-            </div>
+            <h1 className="text-2xl font-bold tracking-tight">
+              Candidate Profile
+            </h1>
             <p className="text-muted-foreground">
-              Candidate details and information
+              Review details and provide feedback
             </p>
           </div>
           
-          <div className="flex flex-wrap gap-2">
+          <div className="flex gap-2">
             <Button
               variant={isLiked ? "outline" : "default"}
-              onClick={handleLikeToggle}
+              onClick={handleLike}
               className={isLiked ? "border-red-500 text-red-500" : ""}
             >
-              {isLiked ? 'Remove Like' : 'Like Candidate'}
+              {isLiked ? 'Remove Like' : 'Like This Candidate'}
+            </Button>
+            <Button variant="outline" onClick={() => navigate('/client/candidates')}>
+              Back to Candidates
             </Button>
           </div>
         </div>
 
         <Tabs defaultValue="profile" className="w-full">
-          <TabsList className="grid w-full md:w-auto md:inline-grid grid-cols-2 md:grid-cols-3">
+          <TabsList className="w-full md:w-auto grid grid-cols-2 md:inline-grid md:grid-cols-3">
             <TabsTrigger value="profile">Profile</TabsTrigger>
             <TabsTrigger value="experience">Experience</TabsTrigger>
             <TabsTrigger value="feedback">Provide Feedback</TabsTrigger>
@@ -347,22 +278,18 @@ export default function ClientCandidateDetailPage() {
                   {candidate.education && candidate.education.length > 0 ? (
                     <div className="space-y-3">
                       {candidate.education.map((edu, index) => (
-                        <div key={index} className="flex gap-3">
-                          <AcademicCapIcon className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-1" />
-                          <div>
-                            <p className="font-medium">{edu.degree} in {edu.field_of_study}</p>
-                            <p className="text-sm">{edu.institution}</p>
-                            {edu.start_date && (
-                              <p className="text-xs text-muted-foreground">
-                                {edu.start_date} - {edu.end_date || 'Present'}
-                              </p>
-                            )}
-                          </div>
+                        <div key={index} className="border-b pb-2 last:border-0 last:pb-0">
+                          <p className="font-medium">{edu.degree}</p>
+                          <p>{edu.institution}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {edu.field_of_study}
+                            {edu.start_date && `, ${edu.start_date} - ${edu.end_date || 'Present'}`}
+                          </p>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <p className="text-muted-foreground">No education history listed</p>
+                    <p className="text-muted-foreground">No education details listed</p>
                   )}
                 </CardContent>
               </Card>
@@ -378,24 +305,29 @@ export default function ClientCandidateDetailPage() {
                 {candidate.experience && candidate.experience.length > 0 ? (
                   <div className="space-y-6">
                     {candidate.experience.map((exp, index) => (
-                      <div key={index} className="flex gap-3">
-                        <BriefcaseIcon className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-1" />
-                        <div>
-                          <p className="font-medium">{exp.title}</p>
-                          <p className="text-sm">{exp.company} {exp.location ? `• ${exp.location}` : ''}</p>
-                          {exp.start_date && (
-                            <p className="text-sm text-muted-foreground">
-                              {exp.start_date} - {exp.current ? 'Present' : (exp.end_date || '')}
-                            </p>
-                          )}
-                          {exp.responsibilities && exp.responsibilities.length > 0 && (
-                            <ul className="mt-2 list-disc pl-4 space-y-1 text-sm">
-                              {exp.responsibilities.map((resp, i) => (
-                                <li key={i}>{resp}</li>
+                      <div key={index} className="border-b pb-4 last:border-0 last:pb-0">
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <h3 className="font-medium">{exp.title}</h3>
+                            <p>{exp.company}</p>
+                          </div>
+                          <p className="text-sm text-muted-foreground whitespace-nowrap">
+                            {exp.start_date && `${exp.start_date} - ${exp.current ? 'Present' : (exp.end_date || '')}`}
+                          </p>
+                        </div>
+                        {exp.location && (
+                          <p className="text-sm text-muted-foreground mb-2">{exp.location}</p>
+                        )}
+                        {exp.responsibilities && exp.responsibilities.length > 0 && (
+                          <div className="mt-2">
+                            <p className="text-sm font-medium mb-1">Responsibilities:</p>
+                            <ul className="list-disc pl-5 space-y-1">
+                              {exp.responsibilities.map((item, idx) => (
+                                <li key={idx} className="text-sm">{item}</li>
                               ))}
                             </ul>
-                          )}
-                        </div>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -405,50 +337,40 @@ export default function ClientCandidateDetailPage() {
               </CardContent>
             </Card>
             
-            <Card>
-              <CardHeader>
-                <CardTitle>Projects</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {candidate.projects && candidate.projects.length > 0 ? (
+            {candidate.projects && candidate.projects.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Projects</CardTitle>
+                </CardHeader>
+                <CardContent>
                   <div className="space-y-4">
                     {candidate.projects.map((project, index) => (
-                      <div key={index} className="flex gap-3">
-                        <DocumentTextIcon className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-1" />
-                        <div>
-                          <p className="font-medium">
-                            {project.name}
-                            {project.url && (
-                              <a href={project.url} target="_blank" rel="noopener noreferrer" className="ml-2 text-sm text-blue-600 hover:underline">
-                                View Project
-                              </a>
-                            )}
-                          </p>
-                          {project.description && (
-                            <p className="text-sm mt-1">{project.description}</p>
-                          )}
-                          {project.technologies && project.technologies.length > 0 && (
-                            <div className="flex flex-wrap gap-1 mt-2">
-                              {project.technologies.map((tech, i) => (
-                                <Badge key={i} variant="outline" className="text-xs">{tech}</Badge>
-                              ))}
-                            </div>
-                          )}
-                          {project.start_date && (
-                            <div className="flex items-center mt-2 text-xs text-muted-foreground">
-                              <ClockIcon className="h-3 w-3 mr-1" />
-                              <span>{project.start_date} - {project.end_date || 'Present'}</span>
-                            </div>
-                          )}
-                        </div>
+                      <div key={index} className="border-b pb-3 last:border-0 last:pb-0">
+                        <h3 className="font-medium">{project.name}</h3>
+                        {project.description && <p className="text-sm mt-1">{project.description}</p>}
+                        {project.technologies && project.technologies.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {project.technologies.map((tech, idx) => (
+                              <Badge key={idx} variant="outline" className="text-xs">{tech}</Badge>
+                            ))}
+                          </div>
+                        )}
+                        {project.url && (
+                          <a 
+                            href={project.url} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-sm text-blue-600 hover:underline mt-2 inline-block"
+                          >
+                            View Project
+                          </a>
+                        )}
                       </div>
                     ))}
                   </div>
-                ) : (
-                  <p className="text-muted-foreground">No projects listed</p>
-                )}
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
           
           <TabsContent value="feedback" className="space-y-4 mt-4">
@@ -456,59 +378,49 @@ export default function ClientCandidateDetailPage() {
               <CardHeader>
                 <CardTitle>Provide Feedback</CardTitle>
                 <CardDescription>
-                  Let us know what you think about this candidate
+                  Your feedback helps us understand your needs and improve our candidate matching
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <div className="space-y-2">
-                    <label htmlFor="feedback" className="block font-medium">Your Feedback</label>
-                    <Textarea 
-                      id="feedback"
-                      placeholder="Please share your thoughts on this candidate's qualifications, fit for your organization, etc."
-                      rows={5}
-                      value={feedback}
-                      onChange={(e) => setFeedback(e.target.value)}
-                    />
-                  </div>
-                  <div className="flex justify-end">
-                    <Button 
-                      onClick={handleSubmitFeedback}
-                      disabled={!feedback.trim() || isSubmittingFeedback}
-                    >
-                      {isSubmittingFeedback ? 'Submitting...' : 'Submit Feedback'}
-                    </Button>
-                  </div>
+                  <Textarea
+                    placeholder="Enter your thoughts about this candidate's fit for your company..."
+                    value={feedback}
+                    onChange={(e) => setFeedback(e.target.value)}
+                    className="min-h-[150px]"
+                  />
                 </div>
               </CardContent>
+              <CardFooter className="flex justify-end">
+                <Button 
+                  onClick={handleSubmitFeedback}
+                  disabled={isSubmitting || !feedback.trim()}
+                >
+                  {isSubmitting ? 'Submitting...' : 'Submit Feedback'}
+                </Button>
+              </CardFooter>
             </Card>
             
             <Card>
               <CardHeader>
-                <CardTitle>Reject Candidate</CardTitle>
-                <CardDescription>
-                  If this candidate is not a good fit, please let us know why
-                </CardDescription>
+                <CardTitle>Next Steps</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <div className="space-y-2">
-                    <label htmlFor="rejection" className="block font-medium">Reason for Rejection</label>
-                    <Textarea 
-                      id="rejection"
-                      placeholder="Please explain why this candidate is not suitable for your needs"
-                      rows={3}
-                      value={rejectionReason}
-                      onChange={(e) => setRejectionReason(e.target.value)}
-                    />
+                  <p>If you're interested in this candidate:</p>
+                  <ol className="list-decimal pl-5 space-y-2">
+                    <li>Click the "Like This Candidate" button to express interest</li>
+                    <li>Our recruitment team will contact you to discuss next steps</li>
+                    <li>We'll coordinate interviews and facilitate the hiring process</li>
+                  </ol>
+                  
+                  <div className="border-t pt-4 mt-4">
+                    <p className="font-medium">Need more information?</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Contact your account manager for additional details about this candidate
+                      or to request specific information not shown in the profile.
+                    </p>
                   </div>
-                  <Button 
-                    variant="destructive"
-                    onClick={handleReject}
-                    disabled={!rejectionReason.trim() || isSubmittingRejection}
-                  >
-                    {isSubmittingRejection ? 'Submitting...' : 'Reject Candidate'}
-                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -517,26 +429,4 @@ export default function ClientCandidateDetailPage() {
       </div>
     </ClientLayout>
   );
-}
-
-function getPipelineStageLabel(stage?: string): string {
-  if (!stage) return 'New';
-  
-  const labels: Record<string, string> = {
-    new_candidate: 'New',
-    screening: 'Screening',
-    interview_scheduled: 'Interview Scheduled',
-    interview_completed: 'Interview Completed',
-    technical_assessment: 'Assessment',
-    reference_check: 'Reference Check',
-    offer_pending: 'Offer Pending',
-    offer_sent: 'Offer Sent',
-    offer_accepted: 'Accepted',
-    offer_rejected: 'Rejected',
-    onboarding: 'Onboarding',
-    hired: 'Hired',
-    rejected: 'Rejected'
-  };
-  
-  return labels[stage] || stage;
 }
