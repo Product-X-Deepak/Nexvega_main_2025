@@ -1,321 +1,216 @@
 
 import { useState, useEffect } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
-import { useToast } from "@/hooks/use-toast";
-import { useAuth } from '@/hooks/useAuth';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
-import { StaffProfile } from '@/components/StaffProfile';
+import { useToast } from '@/hooks/use-toast';
+
+interface UserNotificationSettings {
+  emailNotifications: boolean;
+  desktopNotifications: boolean;
+  newCandidateAlerts: boolean;
+  weeklyDigest: boolean;
+}
+
+interface AppearanceSettings {
+  theme: 'light' | 'dark' | 'system';
+  fontSize: string;
+  reducedMotion: boolean;
+}
 
 export default function SettingsPage() {
-  const { user } = useAuth();
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState("profile");
-  const [loadingSettings, setLoadingSettings] = useState(false);
-  const [saveLoading, setSaveLoading] = useState(false);
-  const [notificationSettings, setNotificationSettings] = useState({
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  
+  const [notificationSettings, setNotificationSettings] = useState<UserNotificationSettings>({
     emailNotifications: true,
+    desktopNotifications: false,
     newCandidateAlerts: true,
-    jobUpdates: true,
-    weeklyDigest: false,
-    systemAnnouncements: true
+    weeklyDigest: true,
   });
-
-  const [appearance, setAppearance] = useState({
-    theme: "system",
-    compactMode: false
+  
+  const [appearanceSettings, setAppearanceSettings] = useState<AppearanceSettings>({
+    theme: 'system',
+    fontSize: 'medium',
+    reducedMotion: false,
   });
-
-  useEffect(() => {
-    const loadSettings = async () => {
-      if (!user?.id) return;
-      
-      try {
-        setLoadingSettings(true);
-        const { data, error } = await supabase
-          .from('settings')
-          .select('key, value')
-          .eq('created_by', user.id);
-          
-        if (error) throw error;
-        
-        // Process settings if they exist
-        if (data && data.length > 0) {
-          data.forEach(setting => {
-            if (setting.key === 'notifications') {
-              setNotificationSettings({
-                ...notificationSettings,
-                ...setting.value
-              });
-            } else if (setting.key === 'appearance') {
-              setAppearance({
-                ...appearance,
-                ...setting.value
-              });
-            }
-          });
-        }
-      } catch (error) {
-        console.error("Error loading settings:", error);
-        toast({
-          title: "Error loading settings",
-          description: "Your settings could not be loaded. Please try again.",
-          variant: "destructive"
-        });
-      } finally {
-        setLoadingSettings(false);
-      }
-    };
-    
-    loadSettings();
-  }, [user?.id]);
-
-  const saveSettings = async (key: string, value: any) => {
-    if (!user?.id) return;
+  
+  // Function to handle notification settings changes
+  const handleNotificationChange = (key: keyof UserNotificationSettings, value: boolean) => {
+    setNotificationSettings((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+  };
+  
+  // Function to handle appearance settings changes
+  const handleAppearanceChange = (key: keyof AppearanceSettings, value: string | boolean) => {
+    setAppearanceSettings((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+  };
+  
+  // Function to save settings
+  const handleSaveSettings = async () => {
+    setIsSaving(true);
     
     try {
-      setSaveLoading(true);
-      
-      // Check if setting already exists
-      const { data: existingData, error: queryError } = await supabase
-        .from('settings')
-        .select('id')
-        .eq('created_by', user.id)
-        .eq('key', key)
-        .maybeSingle();
-        
-      if (queryError) throw queryError;
-      
-      let result;
-      
-      if (existingData) {
-        // Update existing setting
-        result = await supabase
-          .from('settings')
-          .update({ value })
-          .eq('id', existingData.id);
-      } else {
-        // Insert new setting
-        result = await supabase
-          .from('settings')
-          .insert({
-            key,
-            value,
-            created_by: user.id,
-            description: `User setting for ${key}`
-          });
-      }
-      
-      if (result.error) throw result.error;
+      // In a real app, we'd save to the database
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Mock delay
       
       toast({
         title: "Settings saved",
-        description: "Your settings have been updated successfully."
+        description: "Your preferences have been updated successfully.",
       });
     } catch (error) {
-      console.error("Error saving settings:", error);
       toast({
         title: "Error saving settings",
-        description: "Your settings could not be saved. Please try again.",
-        variant: "destructive"
+        description: "There was a problem saving your preferences. Please try again.",
+        variant: "destructive",
       });
     } finally {
-      setSaveLoading(false);
+      setIsSaving(false);
     }
-  };
-
-  const handleNotificationChange = (key: string, value: boolean) => {
-    const updatedSettings = {
-      ...notificationSettings,
-      [key]: value
-    };
-    setNotificationSettings(updatedSettings);
-    saveSettings('notifications', updatedSettings);
-  };
-
-  const handleAppearanceChange = (key: string, value: any) => {
-    const updatedSettings = {
-      ...appearance,
-      [key]: value
-    };
-    setAppearance(updatedSettings);
-    saveSettings('appearance', updatedSettings);
   };
 
   return (
     <MainLayout>
-      <div className="container max-w-5xl py-6">
-        <h1 className="text-2xl font-bold mb-6">Settings</h1>
+      <div className="flex flex-col gap-5">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
+          <p className="text-muted-foreground">
+            Manage your account settings and preferences
+          </p>
+        </div>
 
-        <Tabs 
-          defaultValue="profile" 
-          value={activeTab}
-          onValueChange={setActiveTab}
-          className="w-full"
-        >
-          <TabsList className="grid w-full grid-cols-3 mb-8">
-            <TabsTrigger value="profile">Profile</TabsTrigger>
-            <TabsTrigger value="notifications">Notifications</TabsTrigger>
-            <TabsTrigger value="appearance">Appearance</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="profile" className="space-y-4">
-            {user && <StaffProfile userId={user.id} isCurrentUser={true} />}
+        <Card>
+          <CardHeader>
+            <CardTitle>Notifications</CardTitle>
+            <CardDescription>Configure how you want to be notified</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label htmlFor="email-notifications" className="font-medium">Email Notifications</Label>
+                <p className="text-sm text-muted-foreground">Receive email notifications about important updates</p>
+              </div>
+              <Switch
+                id="email-notifications"
+                checked={notificationSettings.emailNotifications}
+                onCheckedChange={(checked) => handleNotificationChange('emailNotifications', checked)}
+              />
+            </div>
             
-            <Card>
-              <CardHeader>
-                <CardTitle>Account Settings</CardTitle>
-                <CardDescription>
-                  Manage your account and security settings
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input id="email" value={user?.email || ''} disabled />
-                </div>
-                <Button variant="outline">Change Password</Button>
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="notifications" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Notification Preferences</CardTitle>
-                <CardDescription>
-                  Control which notifications you receive from the ATS system
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">Email Notifications</p>
-                    <p className="text-sm text-muted-foreground">
-                      Receive notifications via email
-                    </p>
-                  </div>
-                  <Switch 
-                    checked={notificationSettings.emailNotifications} 
-                    onCheckedChange={(checked) => handleNotificationChange('emailNotifications', checked)}
-                    disabled={loadingSettings || saveLoading}
-                  />
-                </div>
-                
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">New Candidate Alerts</p>
-                    <p className="text-sm text-muted-foreground">
-                      Get notified when new candidates are added to the system
-                    </p>
-                  </div>
-                  <Switch 
-                    checked={notificationSettings.newCandidateAlerts}
-                    onCheckedChange={(checked) => handleNotificationChange('newCandidateAlerts', checked)}
-                    disabled={loadingSettings || saveLoading || !notificationSettings.emailNotifications}
-                  />
-                </div>
-                
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">Job Updates</p>
-                    <p className="text-sm text-muted-foreground">
-                      Get notified about job status changes and new jobs
-                    </p>
-                  </div>
-                  <Switch 
-                    checked={notificationSettings.jobUpdates}
-                    onCheckedChange={(checked) => handleNotificationChange('jobUpdates', checked)}
-                    disabled={loadingSettings || saveLoading || !notificationSettings.emailNotifications}
-                  />
-                </div>
-                
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">Weekly Digest</p>
-                    <p className="text-sm text-muted-foreground">
-                      Receive a weekly summary of system activity
-                    </p>
-                  </div>
-                  <Switch 
-                    checked={notificationSettings.weeklyDigest}
-                    onCheckedChange={(checked) => handleNotificationChange('weeklyDigest', checked)}
-                    disabled={loadingSettings || saveLoading || !notificationSettings.emailNotifications}
-                  />
-                </div>
-                
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">System Announcements</p>
-                    <p className="text-sm text-muted-foreground">
-                      Receive important announcements about the ATS system
-                    </p>
-                  </div>
-                  <Switch 
-                    checked={notificationSettings.systemAnnouncements}
-                    onCheckedChange={(checked) => handleNotificationChange('systemAnnouncements', checked)}
-                    disabled={loadingSettings || saveLoading || !notificationSettings.emailNotifications}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="appearance" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Appearance</CardTitle>
-                <CardDescription>
-                  Customize how the ATS system looks for you
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="theme">Theme Preference</Label>
-                    <select
-                      id="theme"
-                      className="w-full border rounded-md p-2"
-                      value={appearance.theme}
-                      onChange={(e) => handleAppearanceChange('theme', e.target.value)}
-                      disabled={loadingSettings || saveLoading}
-                    >
-                      <option value="light">Light</option>
-                      <option value="dark">Dark</option>
-                      <option value="system">System Default</option>
-                    </select>
-                    <p className="text-sm text-muted-foreground">
-                      Choose your preferred color theme for the application
-                    </p>
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">Compact Mode</p>
-                      <p className="text-sm text-muted-foreground">
-                        Use a more compact layout with less spacing
-                      </p>
-                    </div>
-                    <Switch 
-                      checked={appearance.compactMode}
-                      onCheckedChange={(checked) => handleAppearanceChange('compactMode', checked)}
-                      disabled={loadingSettings || saveLoading}
-                    />
-                  </div>
-                </div>
-              </CardContent>
-              <CardFooter className="flex justify-between">
-                <Button variant="outline">Reset to Defaults</Button>
-                <Button>Apply Changes</Button>
-              </CardFooter>
-            </Card>
-          </TabsContent>
-        </Tabs>
+            <Separator />
+            
+            <div className="flex items-center justify-between">
+              <div>
+                <Label htmlFor="desktop-notifications" className="font-medium">Desktop Notifications</Label>
+                <p className="text-sm text-muted-foreground">Show desktop notifications when browser is open</p>
+              </div>
+              <Switch
+                id="desktop-notifications"
+                checked={notificationSettings.desktopNotifications}
+                onCheckedChange={(checked) => handleNotificationChange('desktopNotifications', checked)}
+              />
+            </div>
+            
+            <Separator />
+            
+            <div className="flex items-center justify-between">
+              <div>
+                <Label htmlFor="candidate-alerts" className="font-medium">New Candidate Alerts</Label>
+                <p className="text-sm text-muted-foreground">Get notified when new candidate matches your jobs</p>
+              </div>
+              <Switch
+                id="candidate-alerts"
+                checked={notificationSettings.newCandidateAlerts}
+                onCheckedChange={(checked) => handleNotificationChange('newCandidateAlerts', checked)}
+              />
+            </div>
+            
+            <Separator />
+            
+            <div className="flex items-center justify-between">
+              <div>
+                <Label htmlFor="weekly-digest" className="font-medium">Weekly Digest</Label>
+                <p className="text-sm text-muted-foreground">Receive a weekly summary of activities</p>
+              </div>
+              <Switch
+                id="weekly-digest"
+                checked={notificationSettings.weeklyDigest}
+                onCheckedChange={(checked) => handleNotificationChange('weeklyDigest', checked)}
+              />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader>
+            <CardTitle>Appearance</CardTitle>
+            <CardDescription>Customize the look and feel of the application</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="theme">Theme</Label>
+              <Select
+                value={appearanceSettings.theme}
+                onValueChange={(value) => handleAppearanceChange('theme', value as 'light' | 'dark' | 'system')}
+              >
+                <SelectTrigger id="theme">
+                  <SelectValue placeholder="Select theme" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="light">Light</SelectItem>
+                  <SelectItem value="dark">Dark</SelectItem>
+                  <SelectItem value="system">System</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="font-size">Font Size</Label>
+              <Select
+                value={appearanceSettings.fontSize}
+                onValueChange={(value) => handleAppearanceChange('fontSize', value)}
+              >
+                <SelectTrigger id="font-size">
+                  <SelectValue placeholder="Select font size" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="small">Small</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="large">Large</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="flex items-center justify-between">
+              <div>
+                <Label htmlFor="reduced-motion" className="font-medium">Reduced Motion</Label>
+                <p className="text-sm text-muted-foreground">Minimize animations for accessibility</p>
+              </div>
+              <Switch
+                id="reduced-motion"
+                checked={appearanceSettings.reducedMotion}
+                onCheckedChange={(checked) => handleAppearanceChange('reducedMotion', checked)}
+              />
+            </div>
+          </CardContent>
+          <CardFooter className="flex justify-end">
+            <Button onClick={handleSaveSettings} disabled={isSaving}>
+              {isSaving ? 'Saving...' : 'Save Settings'}
+            </Button>
+          </CardFooter>
+        </Card>
       </div>
     </MainLayout>
   );

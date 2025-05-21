@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import ClientLayout from '@/components/layout/ClientLayout';
@@ -8,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Candidate } from '@/lib/supabase';
+import { Candidate } from '@/types';
 import { Badge } from '@/components/ui/badge';
 
 interface CandidateWithLiked extends Partial<Candidate> {
@@ -53,10 +52,15 @@ export default function ClientCandidatesPage() {
       if (candidatesError) throw candidatesError;
       
       // Add liked status to candidates
-      const candidatesWithLiked = candidatesData.map(candidate => ({
-        ...candidate,
-        liked: clientData.liked_candidates?.includes(candidate.id) || false
-      })) as CandidateWithLiked[];
+      const candidatesWithLiked = candidatesData.map(candidate => {
+        return {
+          ...candidate,
+          education: Array.isArray(candidate.education) ? candidate.education : [],
+          experience: Array.isArray(candidate.experience) ? candidate.experience : [],
+          skills: Array.isArray(candidate.skills) ? candidate.skills : [],
+          liked: clientData.liked_candidates?.includes(candidate.id) || false
+        };
+      }) as CandidateWithLiked[];
       
       setCandidates(candidatesWithLiked);
     } catch (error) {

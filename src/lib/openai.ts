@@ -1,5 +1,4 @@
 
-
 import OpenAI from 'openai';
 
 // This will be stored as an environment variable in deployment
@@ -106,3 +105,13 @@ export async function matchJobWithCandidates(jobDescription: string, candidatePr
   return content ? JSON.parse(content) : null;
 }
 
+// Add the processResume function that's missing
+export const processResume = async (resumeText: string) => {
+  try {
+    const parsedData = await parseResume(resumeText);
+    return parsedData;
+  } catch (error) {
+    console.error('Error processing resume:', error);
+    throw new Error('Failed to process resume');
+  }
+};

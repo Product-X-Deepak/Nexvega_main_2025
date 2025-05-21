@@ -42,7 +42,18 @@ export default function ClientCandidateDetailPage() {
         
       if (error) throw error;
       
-      setCandidate(data as Candidate);
+      // Convert the returned data to match our Candidate type
+      setCandidate({
+        ...data,
+        education: Array.isArray(data.education) ? data.education : [],
+        experience: Array.isArray(data.experience) ? data.experience : [],
+        projects: Array.isArray(data.projects) ? data.projects : [],
+        publications: Array.isArray(data.publications) ? data.publications : [],
+        skills: Array.isArray(data.skills) ? data.skills : [],
+        languages: Array.isArray(data.languages) ? data.languages : [],
+        embedding: Array.isArray(data.embedding) ? data.embedding : undefined
+      } as Candidate);
+      
     } catch (error) {
       console.error('Error fetching candidate:', error);
       toast({

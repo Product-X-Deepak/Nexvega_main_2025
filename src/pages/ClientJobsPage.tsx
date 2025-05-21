@@ -31,7 +31,15 @@ export default function ClientJobsPage() {
         
       if (error) throw error;
       
-      setJobs(data || []);
+      // Transform the data to match our Job type
+      const transformedJobs = data.map(job => ({
+        ...job,
+        requirements: Array.isArray(job.requirements) ? job.requirements : [],
+        responsibilities: Array.isArray(job.responsibilities) ? job.responsibilities : [],
+        embedding: Array.isArray(job.embedding) ? job.embedding : undefined
+      })) as Job[];
+      
+      setJobs(transformedJobs);
     } catch (error) {
       console.error('Error fetching jobs:', error);
       toast({

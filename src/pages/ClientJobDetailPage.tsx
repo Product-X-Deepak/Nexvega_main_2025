@@ -40,7 +40,14 @@ export default function ClientJobDetailPage() {
         
       if (error) throw error;
       
-      setJob(data as Job);
+      // Convert the embedding if it exists
+      setJob({
+        ...data,
+        requirements: Array.isArray(data.requirements) ? data.requirements : [],
+        responsibilities: Array.isArray(data.responsibilities) ? data.responsibilities : [],
+        embedding: Array.isArray(data.embedding) ? data.embedding : undefined
+      } as Job);
+      
     } catch (error) {
       console.error('Error fetching job:', error);
       toast({
