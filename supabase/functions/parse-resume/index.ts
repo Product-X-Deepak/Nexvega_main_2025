@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.4.0";
@@ -36,7 +35,7 @@ serve(async (req) => {
     // Get request body
     const requestData = await req.json();
     let resumeText = requestData.resumeText || '';
-    const model = requestData.model || "gpt-4o";
+    const model = requestData.model || Deno.env.get("OPENAI_DEFAULT_MODEL") || "gpt-4o";
     
     // Check if we're getting a resume URL instead of text
     if (requestData.resumeUrl) {
@@ -91,8 +90,9 @@ serve(async (req) => {
     }
     
     // Validate model selection
-    const supportedModels = ['gpt-3.5-turbo', 'gpt-4o'];
-    const selectedModel = supportedModels.includes(model) ? model : 'gpt-4o';
+    const defaultModel = Deno.env.get("OPENAI_DEFAULT_MODEL") || "gpt-4o";
+    const supportedModels = ['gpt-3.5-turbo', 'gpt-4o', 'gpt-4o-mini'];
+    const selectedModel = supportedModels.includes(model) ? model : defaultModel;
     
     console.log(`Processing resume with model: ${selectedModel}`);
     

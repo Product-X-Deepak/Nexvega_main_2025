@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -21,7 +20,7 @@ interface ChatAssistantProps {
   onAction?: (action: string, data: any) => void;
 }
 
-export default function ChatAssistant({ model = 'gpt-3.5-turbo', onAction }: ChatAssistantProps) {
+export default function ChatAssistant({ model = import.meta.env.VITE_OPENAI_DEFAULT_MODEL || 'gpt-3.5-turbo', onAction }: ChatAssistantProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -439,10 +438,15 @@ export default function ChatAssistant({ model = 'gpt-3.5-turbo', onAction }: Cha
                   <Zap className="h-3 w-3 mr-1 text-blue-500" />
                   GPT-3.5 Turbo
                 </>
-              ) : (
+              ) : model === 'gpt-4o' ? (
                 <>
                   <BrainCircuit className="h-3 w-3 mr-1 text-purple-500" />
                   GPT-4o
+                </>
+              ) : (
+                <>
+                  <BrainCircuit className="h-3 w-3 mr-1 text-green-500" />
+                  {model}
                 </>
               )}
             </div>

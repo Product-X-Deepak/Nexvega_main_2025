@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.4.0";
@@ -39,7 +38,7 @@ serve(async (req) => {
       userRole, 
       userId, 
       messageHistory = [], 
-      model = 'gpt-3.5-turbo',
+      model = Deno.env.get("OPENAI_DEFAULT_MODEL") || 'gpt-3.5-turbo',
       action = null,
       actionParams = {}
     } = await req.json();
@@ -55,8 +54,9 @@ serve(async (req) => {
     }
     
     // Validate model selection
-    const supportedModels = ['gpt-3.5-turbo', 'gpt-4o'];
-    const selectedModel = supportedModels.includes(model) ? model : 'gpt-3.5-turbo';
+    const defaultModel = Deno.env.get("OPENAI_DEFAULT_MODEL") || 'gpt-3.5-turbo';
+    const supportedModels = ['gpt-3.5-turbo', 'gpt-4o', 'gpt-4o-mini'];
+    const selectedModel = supportedModels.includes(model) ? model : defaultModel;
     
     // Handle special actions before calling OpenAI
     if (action) {

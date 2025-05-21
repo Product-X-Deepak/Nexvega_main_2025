@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.4.0";
@@ -64,7 +63,7 @@ serve(async (req) => {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "text-embedding-3-small",
+        model: Deno.env.get("OPENAI_EMBEDDING_MODEL") || "text-embedding-3-small",
         input: text.substring(0, 8000)  // Limit to 8000 chars to stay within API limits
       })
     });

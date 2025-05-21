@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import OpenAI from "https://esm.sh/openai@4.26.0";
@@ -85,7 +84,7 @@ serve(async (req) => {
     `;
     
     const embeddingResponse = await openai.embeddings.create({
-      model: "text-embedding-3-small",
+      model: Deno.env.get("OPENAI_EMBEDDING_MODEL") || "text-embedding-3-small",
       input: jobText,
     });
 
@@ -93,7 +92,7 @@ serve(async (req) => {
     
     // Use OpenAI to analyze the match between the candidate and the job
     const matchAnalysis = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: Deno.env.get("OPENAI_DEFAULT_MODEL") || "gpt-4o-mini",
       messages: [
         {
           role: "system",

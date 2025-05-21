@@ -1,4 +1,3 @@
-
 import OpenAI from 'openai';
 
 // This will be stored as an environment variable in deployment
@@ -16,11 +15,14 @@ export const openai = new OpenAI({
 // In a production environment, API requests should be made through edge functions
 // to protect API keys
 
-export enum ModelType {
-  GPT35Turbo = 'gpt-3.5-turbo',
-  GPT4o = 'gpt-4o',
-  TextEmbedding = 'text-embedding-3-small',
-}
+// Model types as string literals instead of enum to avoid type issues
+export const ModelType = {
+  GPT35Turbo: 'gpt-3.5-turbo',
+  GPT4o: 'gpt-4o',
+  TextEmbedding: import.meta.env.VITE_OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small',
+} as const;
+
+export type ModelTypeKey = keyof typeof ModelType;
 
 export async function generateEmbedding(text: string): Promise<number[]> {
   const response = await openai.embeddings.create({
@@ -32,7 +34,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 }
 
 // Parse resume text with GPT
-export async function parseResume(resumeText: string, modelType: ModelType = ModelType.GPT4o) {
+export async function parseResume(resumeText: string, modelType: string = ModelType.GPT4o) {
   const systemPrompt = `
     You are an expert ATS (Applicant Tracking System) resume parser.
     Extract the following information in a structured JSON format:
@@ -74,7 +76,7 @@ export async function parseResume(resumeText: string, modelType: ModelType = Mod
 }
 
 // Match job description with candidate profiles
-export async function matchJobWithCandidates(jobDescription: string, candidateProfiles: any[], modelType: ModelType = ModelType.GPT4o) {
+export async function matchJobWithCandidates(jobDescription: string, candidateProfiles: any[], modelType: string = ModelType.GPT4o) {
   const systemPrompt = `
     You are an expert talent matcher for an ATS (Applicant Tracking System).
     Analyze the job description and candidate profiles to rank the candidates based on their fit for the role.
@@ -116,7 +118,7 @@ export async function matchJobWithCandidates(jobDescription: string, candidatePr
 }
 
 // Process resume with selected model
-export const processResume = async (resumeText: string, modelType: ModelType = ModelType.GPT4o) => {
+export const processResume = async (resumeText: string, modelType: string = ModelType.GPT4o) => {
   try {
     const parsedData = await parseResume(resumeText, modelType);
     return parsedData;

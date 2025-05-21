@@ -1,4 +1,3 @@
-
 import MainLayout from '@/components/layout/MainLayout';
 import ChatAssistant from '@/components/ChatAssistant';
 import { useAuth } from '@/contexts/AuthContext';
@@ -18,7 +17,7 @@ import {
 
 export default function ChatAssistantPage() {
   const { isAdmin } = useAuth();
-  const [selectedModel, setSelectedModel] = useState<string>("gpt-3.5-turbo");
+  const [selectedModel, setSelectedModel] = useState<string>(import.meta.env.VITE_OPENAI_DEFAULT_MODEL || "gpt-3.5-turbo");
 
   return (
     <MainLayout>
