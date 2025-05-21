@@ -18,7 +18,7 @@ export const openai = new OpenAI({
 
 export enum ModelType {
   GPT35Turbo = 'gpt-3.5-turbo',
-  GPT45Turbo = 'gpt-4-turbo',
+  GPT4o = 'gpt-4o',
   TextEmbedding = 'text-embedding-3-small',
 }
 
@@ -32,7 +32,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 }
 
 // Parse resume text with GPT
-export async function parseResume(resumeText: string) {
+export async function parseResume(resumeText: string, modelType: ModelType = ModelType.GPT4o) {
   const systemPrompt = `
     You are an expert ATS (Applicant Tracking System) resume parser.
     Extract the following information in a structured JSON format:
@@ -56,7 +56,7 @@ export async function parseResume(resumeText: string) {
   `;
 
   const response = await openai.chat.completions.create({
-    model: ModelType.GPT45Turbo,
+    model: modelType,
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: resumeText }
@@ -69,7 +69,7 @@ export async function parseResume(resumeText: string) {
 }
 
 // Match job description with candidate profiles
-export async function matchJobWithCandidates(jobDescription: string, candidateProfiles: any[]) {
+export async function matchJobWithCandidates(jobDescription: string, candidateProfiles: any[], modelType: ModelType = ModelType.GPT4o) {
   const systemPrompt = `
     You are an expert talent matcher for an ATS (Applicant Tracking System).
     Analyze the job description and candidate profiles to rank the candidates based on their fit for the role.
@@ -93,7 +93,7 @@ export async function matchJobWithCandidates(jobDescription: string, candidatePr
   `;
 
   const response = await openai.chat.completions.create({
-    model: ModelType.GPT45Turbo,
+    model: modelType,
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userContent }
@@ -105,10 +105,10 @@ export async function matchJobWithCandidates(jobDescription: string, candidatePr
   return content ? JSON.parse(content) : null;
 }
 
-// Add the processResume function that's missing
-export const processResume = async (resumeText: string) => {
+// Process resume with selected model
+export const processResume = async (resumeText: string, modelType: ModelType = ModelType.GPT4o) => {
   try {
-    const parsedData = await parseResume(resumeText);
+    const parsedData = await parseResume(resumeText, modelType);
     return parsedData;
   } catch (error) {
     console.error('Error processing resume:', error);

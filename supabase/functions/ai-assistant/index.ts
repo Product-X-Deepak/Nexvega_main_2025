@@ -32,7 +32,7 @@ serve(async (req) => {
     }
     
     // Get request body
-    const { message, userRole, userId, messageHistory = [] } = await req.json();
+    const { message, userRole, userId, messageHistory = [], model = 'gpt-3.5-turbo' } = await req.json();
     
     if (!message || !userRole) {
       return new Response(
@@ -43,6 +43,10 @@ serve(async (req) => {
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
+    
+    // Validate model selection
+    const supportedModels = ['gpt-3.5-turbo', 'gpt-4o'];
+    const selectedModel = supportedModels.includes(model) ? model : 'gpt-3.5-turbo';
     
     // Determine system prompt based on user role
     const systemPrompt = userRole === 'admin' 
@@ -89,17 +93,7 @@ serve(async (req) => {
       { role: "user", content: message }
     ];
     
-    // Select the appropriate model based on complexity
-    // For simpler queries, use gpt-4o-mini, for complex ones, use gpt-4o
-    const isComplexQuery = message.length > 100 || 
-                          message.includes("code") || 
-                          message.includes("search") ||
-                          message.includes("match") ||
-                          message.includes("analyze");
-    
-    const modelToUse = isComplexQuery ? "gpt-4o" : "gpt-4o-mini";
-    
-    console.log(`Processing ${userRole} request using ${modelToUse}`);
+    console.log(`Processing ${userRole} request using ${selectedModel}`);
     
     // Call OpenAI API
     const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -109,7 +103,7 @@ serve(async (req) => {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: modelToUse,
+        model: selectedModel,
         messages: conversationHistory,
         temperature: 0.7,
         max_tokens: 1024
@@ -136,7 +130,7 @@ serve(async (req) => {
           new_values: {
             query: message,
             response: assistantResponse.substring(0, 100) + '...',
-            model: modelToUse,
+            model: selectedModel,
             role: userRole
           }
         });
@@ -149,7 +143,7 @@ serve(async (req) => {
       JSON.stringify({ 
         success: true,
         response: assistantResponse,
-        model: modelToUse
+        model: selectedModel
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );

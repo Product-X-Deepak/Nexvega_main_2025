@@ -28,7 +28,7 @@ serve(async (req) => {
     }
     
     // Get request body
-    const { resumeText } = await req.json();
+    const { resumeText, model = "gpt-4o" } = await req.json();
     
     if (!resumeText || resumeText.trim().length < 10) {
       return new Response(
@@ -39,6 +39,10 @@ serve(async (req) => {
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
+    
+    // Validate model selection
+    const supportedModels = ['gpt-3.5-turbo', 'gpt-4o'];
+    const selectedModel = supportedModels.includes(model) ? model : 'gpt-4o';
     
     // Set up system prompt for resume parsing
     const systemPrompt = `
@@ -64,7 +68,7 @@ serve(async (req) => {
     `;
     
     // Send request to OpenAI API
-    console.log("Sending resume text to OpenAI for parsing...");
+    console.log(`Sending resume text to OpenAI for parsing with ${selectedModel}...`);
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -72,7 +76,7 @@ serve(async (req) => {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "gpt-4o",
+        model: selectedModel,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: resumeText }
@@ -116,7 +120,8 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: true,
-        data: parsedData 
+        data: parsedData,
+        model: selectedModel
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );
