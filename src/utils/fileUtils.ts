@@ -18,8 +18,8 @@ export async function extractTextFromFile(file: File): Promise<string> {
   if (fileType === 'application/pdf') {
     try {
       // Set up PDF.js worker
-      const pdfjsWorker = await import('pdfjs-dist/build/pdf.worker.mjs');
-      GlobalWorkerOptions.workerSrc = pdfjsWorker;
+      // Use a more compatible import for the worker
+      GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js`;
       
       // Load the PDF file
       const arrayBuffer = await file.arrayBuffer();

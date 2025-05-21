@@ -1,6 +1,6 @@
 
 import { supabase } from '@/lib/supabase';
-import { Candidate } from '@/types';
+import { Candidate, CandidateStatus, PipelineStage } from '@/types';
 import { extractTextFromFile } from '@/utils/fileUtils';
 
 // Process and upload a single resume

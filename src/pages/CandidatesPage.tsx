@@ -1,387 +1,336 @@
-
-import React, { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useDropzone } from 'react-dropzone';
 import MainLayout from '@/components/layout/MainLayout';
-import { Card, CardContent } from '@/components/ui/card';
-import { 
-  Tabs, 
-  TabsContent, 
-  TabsList, 
-  TabsTrigger 
-} from '@/components/ui/tabs';
-import { useToast } from '@/hooks/use-toast';
-import CandidateFilters from '@/components/candidates/CandidateFilters';
-import CandidatesHeader from '@/components/candidates/CandidatesHeader';
-import CandidatesSearch from '@/components/candidates/CandidatesSearch';
-import CandidatesList from '@/components/candidates/CandidatesList';
-import { useCandidates } from '@/hooks/useCandidates';
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogDescription, 
-  DialogHeader, 
-  DialogTitle 
-} from '@/components/ui/dialog';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from '@/components/ui/select';
+import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { Candidate } from '@/types';
+import { 
+  processMultipleResumes, 
+  saveProcessedCandidate 
+} from '@/services/resumeService';
+import { extractTextFromFile } from '@/utils/fileUtils';
+import { Progress } from '@/components/ui/progress';
+import { Loader2, Upload, File, AlertTriangle, CheckCircle, Trash2 } from 'lucide-react';
+// Import the CandidateFilters type and other imports
+import { CandidateFilters } from '@/types';
 
-export default function CandidatesPage() {
+interface FileWithPreview extends File {
+  preview?: string;
+  error?: string;
+}
+
+export default function CandidateUploadPage() {
+  const [files, setFiles] = useState<FileWithPreview[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({
+    completed: 0,
+    total: 0,
+    success: 0,
+    failed: 0,
+  });
+  const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { isAdmin, isStaff } = useAuth();
-  
-  // State for bulk actions
-  const [selectedCandidates, setSelectedCandidates] = useState<string[]>([]);
-  const [showBulkActions, setShowBulkActions] = useState(false);
-  const [showAssignDialog, setShowAssignDialog] = useState(false);
-  const [showPipelineDialog, setShowPipelineDialog] = useState(false);
-  const [selectedClientId, setSelectedClientId] = useState<string>('');
-  const [selectedPipelineStage, setSelectedPipelineStage] = useState<string>('');
-  const [clientOptions, setClientOptions] = useState<{ id: string, name: string }[]>([]);
-  
-  const {
-    loading,
-    candidates,
-    searchQuery,
-    activeTab,
-    showFilters,
-    filters,
-    searchMode,
-    fetchCandidates,
-    handleSearch,
-    handleTabChange,
-    toggleFilters,
-    handleFilterChange,
-    setSearchMode,
-    updatePipelineStage,
-    assignToClient
-  } = useCandidates();
 
-  const handleAddCandidate = () => {
-    navigate('/candidates/new');
+  // Configure dropzone
+  const { getRootProps, getInputProps, isDragActive, isDragReject } = useDropzone({
+    accept: {
+      'application/pdf': ['.pdf'],
+      'application/msword': ['.doc'],
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
+      'text/csv': ['.csv'],
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
+      'text/plain': ['.txt']
+    },
+    maxSize: 5 * 1024 * 1024, // 5MB
+    maxFiles: 100,
+    onDrop: useCallback((acceptedFiles, rejectedFiles) => {
+      // Add accepted files
+      setFiles(prev => [
+        ...prev, 
+        ...acceptedFiles.map(file => Object.assign(file, {
+          preview: URL.createObjectURL(file)
+        }))
+      ]);
+      
+      // Handle rejected files
+      if (rejectedFiles.length > 0) {
+        rejectedFiles.forEach(rejectedFile => {
+          const reason = rejectedFile.errors[0]?.message || 'Invalid file';
+          toast({
+            title: 'File rejected',
+            description: `${rejectedFile.file.name}: ${reason}`,
+            variant: 'destructive',
+          });
+        });
+      }
+    }, [toast])
+  });
+
+  // Remove a file from the list
+  const removeFile = (file: FileWithPreview) => {
+    setFiles(files => files.filter(f => f !== file));
+    if (file.preview) {
+      URL.revokeObjectURL(file.preview);
+    }
   };
 
-  const handleUploadResumes = () => {
-    navigate('/candidates/upload');
-  };
-
-  const handleRefresh = () => {
-    fetchCandidates();
-    toast({
-      title: "Refreshed",
-      description: "Candidate list has been refreshed",
+  // Clear all files
+  const clearAllFiles = () => {
+    files.forEach(file => {
+      if (file.preview) {
+        URL.revokeObjectURL(file.preview);
+      }
     });
+    setFiles([]);
   };
 
-  const handleBulkExport = () => {
-    // Implement bulk export functionality
-    const selectedData = selectedCandidates.length > 0 
-      ? candidates.filter(c => selectedCandidates.includes(c.id)) 
-      : candidates;
-    
-    toast({
-      title: "Export Started",
-      description: `Preparing ${selectedData.length} candidates for export...`,
-    });
-    
-    // Mock export completion
-    setTimeout(() => {
+  // Upload and process all files
+  const handleUpload = async () => {
+    if (files.length === 0) {
       toast({
-        title: "Export Complete",
-        description: `${selectedData.length} candidates exported successfully`,
+        title: 'No files selected',
+        description: 'Please select at least one resume file to upload',
+        variant: 'destructive',
       });
-    }, 1500);
-  };
-  
-  const handleSelectCandidate = (candidateId: string, isSelected: boolean) => {
-    if (isSelected) {
-      setSelectedCandidates(prev => [...prev, candidateId]);
-    } else {
-      setSelectedCandidates(prev => prev.filter(id => id !== candidateId));
+      return;
     }
     
-    // Show bulk actions when at least one candidate is selected
-    setShowBulkActions(selectedCandidates.length > 0);
-  };
-  
-  const handleSelectAll = (isSelected: boolean) => {
-    if (isSelected) {
-      setSelectedCandidates(candidates.map(c => c.id));
-    } else {
-      setSelectedCandidates([]);
+    if (!user?.id) {
+      toast({
+        title: 'Authentication required',
+        description: 'You must be logged in to upload resumes',
+        variant: 'destructive',
+      });
+      return;
     }
     
-    setShowBulkActions(isSelected && candidates.length > 0);
-  };
-  
-  const handleSearchModeChange = (mode: 'basic' | 'semantic' | 'boolean') => {
-    setSearchMode(mode);
-  };
-  
-  const handleOpenAssignDialog = async () => {
+    setIsUploading(true);
+    setUploadProgress({
+      completed: 0,
+      total: files.length,
+      success: 0,
+      failed: 0,
+    });
+    
     try {
-      // Fetch clients for dropdown
-      const { data, error } = await supabase.from('clients')
-        .select('id, company_name')
-        .eq('status', 'active')
-        .order('company_name');
+      // Process all resumes
+      const { processed, failed } = await processMultipleResumes(files, user.id);
       
-      if (error) throw error;
+      // Save processed candidates to database
+      for (const item of processed) {
+        try {
+          const candidateData = {
+            ...item.parsedData,
+            resumeId: item.resumeId,
+            resumeUrl: item.resumeUrl,
+            created_by: user.id,
+            resumeText: item.resumeText // Used for embedding, not stored directly
+          };
+          
+          await saveProcessedCandidate(candidateData);
+          
+          setUploadProgress(prev => ({
+            ...prev,
+            completed: prev.completed + 1,
+            success: prev.success + 1,
+          }));
+        } catch (error) {
+          console.error('Error saving candidate to database:', error);
+          setUploadProgress(prev => ({
+            ...prev,
+            completed: prev.completed + 1,
+            failed: prev.failed + 1,
+          }));
+        }
+      }
       
-      setClientOptions(data.map(client => ({
-        id: client.id,
-        name: client.company_name
-      })));
+      // Update progress for failed items
+      failed.forEach(() => {
+        setUploadProgress(prev => ({
+          ...prev,
+          completed: prev.completed + 1,
+          failed: prev.failed + 1,
+        }));
+      });
       
-      setShowAssignDialog(true);
+      toast({
+        title: 'Upload complete',
+        description: `Successfully processed ${processed.length} resumes. Failed: ${failed.length}.`,
+        variant: processed.length > 0 ? 'default' : 'destructive',
+      });
+      
+      if (processed.length > 0) {
+        setTimeout(() => {
+          navigate('/candidates');
+        }, 2000);
+      }
     } catch (error) {
-      console.error("Error fetching clients:", error);
+      console.error('Error processing resumes:', error);
       toast({
-        title: "Error",
-        description: "Failed to load client data. Please try again.",
-        variant: "destructive"
+        title: 'Upload failed',
+        description: 'An error occurred while processing the resumes. Please try again.',
+        variant: 'destructive',
       });
+    } finally {
+      setIsUploading(false);
     }
-  };
-  
-  const handleConfirmAssign = async () => {
-    if (!selectedClientId) {
-      toast({
-        title: "No Client Selected",
-        description: "Please select a client to assign candidates to.",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    await assignToClient(selectedCandidates, selectedClientId);
-    setShowAssignDialog(false);
-    setSelectedClientId('');
-  };
-  
-  const handleOpenPipelineDialog = () => {
-    setShowPipelineDialog(true);
-  };
-  
-  const handleConfirmPipelineChange = async () => {
-    if (!selectedPipelineStage) {
-      toast({
-        title: "No Stage Selected",
-        description: "Please select a pipeline stage.",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    await updatePipelineStage(selectedCandidates, selectedPipelineStage as PipelineStage);
-    setShowPipelineDialog(false);
-    setSelectedPipelineStage('');
   };
 
+  // Here's the function that needs to be modified:
+  const handleFilterChange = (key: string, value: any) => {
+    setFilters(prev => ({
+      ...prev,
+      [key]: value
+    }));
+  };
+
+  // When rendering the CandidateFilters component, make sure it accepts the correct prop type:
+  const filters = {}; // dummy filters
   return (
     <MainLayout>
       <div className="flex flex-col gap-5">
-        <CandidatesHeader 
-          onRefresh={handleRefresh}
-          onBulkExport={handleBulkExport}
-          onUploadResumes={handleUploadResumes}
-          onAddCandidate={handleAddCandidate}
-        />
-        
-        <CandidatesSearch 
-          searchQuery={searchQuery}
-          onSearchChange={handleSearch}
-          showFilters={showFilters}
-          onToggleFilters={toggleFilters}
-          searchMode={searchMode}
-          onSearchModeChange={handleSearchModeChange}
-        />
-        
-        {showFilters && (
-          <Card>
-            <CardContent className="pt-6">
-              <CandidateFilters 
-                filters={filters} 
-                onFilterChange={handleFilterChange} 
-              />
-            </CardContent>
-          </Card>
-        )}
-        
-        {/* Bulk Actions Bar */}
-        {showBulkActions && (
-          <div className="flex items-center justify-between p-3 bg-muted rounded-md">
-            <div className="flex items-center gap-2">
-              <Checkbox 
-                checked={selectedCandidates.length === candidates.length}
-                onCheckedChange={handleSelectAll}
-                id="select-all"
-              />
-              <label htmlFor="select-all" className="text-sm font-medium">
-                {selectedCandidates.length} candidate{selectedCandidates.length !== 1 && 's'} selected
-              </label>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Upload Resumes</h1>
+          <p className="text-muted-foreground">
+            Upload candidate resumes for automatic processing
+          </p>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Resume Upload</CardTitle>
+            <CardDescription>
+              Upload resumes in PDF, DOC, DOCX, CSV, or TXT format. Maximum 100 files, 5MB each.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div
+              {...getRootProps()}
+              className={`
+                border-2 border-dashed rounded-lg p-10 text-center cursor-pointer transition-colors
+                ${isDragActive ? 'border-primary bg-primary/10' : 'border-gray-300 hover:border-primary hover:bg-primary/5'}
+                ${isDragReject ? 'border-red-500 bg-red-50' : ''}
+              `}
+            >
+              <input {...getInputProps()} />
+              <Upload className="mx-auto h-12 w-12 text-gray-400" />
+              <p className="mt-2 text-sm text-gray-600">
+                Drag &amp; drop resume files here, or click to select files
+              </p>
+              <p className="mt-1 text-xs text-gray-500">
+                Supported formats: PDF, DOC, DOCX, CSV, TXT (Max 5MB each)
+              </p>
             </div>
-            <div className="flex gap-2">
-              {(isAdmin() || isStaff()) && (
-                <>
+
+            {files.length > 0 && (
+              <div className="mt-6">
+                <div className="flex justify-between items-center mb-2">
+                  <h3 className="font-medium text-sm">Selected Files ({files.length})</h3>
                   <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={handleOpenAssignDialog}
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={clearAllFiles}
+                    disabled={isUploading}
                   >
-                    Assign to Client
+                    <Trash2 className="h-4 w-4 mr-1" />
+                    Clear All
                   </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={handleOpenPipelineDialog}
-                  >
-                    Update Pipeline Stage
-                  </Button>
-                </>
-              )}
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={handleBulkExport}
-              >
-                Export Selected
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="sm"
-                onClick={() => {
-                  setSelectedCandidates([]);
-                  setShowBulkActions(false);
-                }}
-              >
-                Cancel
-              </Button>
-            </div>
-          </div>
-        )}
-        
-        <Tabs defaultValue="all" value={activeTab} onValueChange={handleTabChange}>
-          <TabsList className="mb-4">
-            <TabsTrigger value="all">All Candidates</TabsTrigger>
-            <TabsTrigger value="active">Active</TabsTrigger>
-            <TabsTrigger value="inactive">Inactive</TabsTrigger>
-            <TabsTrigger value="pipeline">In Pipeline</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value={activeTab} className="mt-0">
-            <CandidatesList 
-              loading={loading}
-              candidates={candidates}
-              onAddCandidate={handleAddCandidate}
-              onUploadResumes={handleUploadResumes}
-              selectedCandidates={selectedCandidates}
-              onSelectCandidate={handleSelectCandidate}
-              onSelectAll={handleSelectAll}
-              showSelection={showBulkActions}
-            />
-          </TabsContent>
-        </Tabs>
-      </div>
-      
-      {/* Assign to Client Dialog */}
-      <Dialog open={showAssignDialog} onOpenChange={setShowAssignDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Assign Candidates to Client</DialogTitle>
-            <DialogDescription>
-              Select a client to assign the {selectedCandidates.length} selected candidate{selectedCandidates.length !== 1 && 's'} to.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label htmlFor="client-select" className="text-sm font-medium">
-                Select Client
-              </label>
-              <Select value={selectedClientId} onValueChange={setSelectedClientId}>
-                <SelectTrigger id="client-select">
-                  <SelectValue placeholder="Select a client" />
-                </SelectTrigger>
-                <SelectContent>
-                  {clientOptions.map(client => (
-                    <SelectItem key={client.id} value={client.id}>
-                      {client.name}
-                    </SelectItem>
+                </div>
+                
+                <div className="grid gap-2 max-h-60 overflow-y-auto p-2">
+                  {files.map((file, index) => (
+                    <div
+                      key={`${file.name}-${index}`}
+                      className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800 rounded-md"
+                    >
+                      <div className="flex items-center gap-2 overflow-hidden">
+                        <File className={`h-5 w-5 ${
+                          file.type === 'application/pdf' ? 'text-red-500' : 
+                          file.type.includes('word') ? 'text-blue-500' : 
+                          file.type.includes('csv') || file.type.includes('sheet') ? 'text-green-500' : 
+                          'text-gray-500'
+                        }`} />
+                        <span className="text-sm truncate max-w-xs">{file.name}</span>
+                        {file.error && (
+                          <AlertTriangle className="h-4 w-4 text-red-500" />
+                        )}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeFile(file)}
+                        disabled={isUploading}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button 
-              variant="outline" 
-              onClick={() => setShowAssignDialog(false)}
+                </div>
+              </div>
+            )}
+
+            {isUploading && (
+              <div className="mt-6">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium">Processing resumes...</span>
+                  <span className="text-sm text-muted-foreground">
+                    {uploadProgress.completed}/{uploadProgress.total}
+                  </span>
+                </div>
+                <Progress 
+                  value={(uploadProgress.completed / uploadProgress.total) * 100} 
+                  className="h-2"
+                />
+                <div className="flex justify-between mt-2 text-xs text-muted-foreground">
+                  <span className="flex items-center">
+                    <CheckCircle className="h-4 w-4 text-green-500 mr-1" />
+                    Success: {uploadProgress.success}
+                  </span>
+                  <span className="flex items-center">
+                    <AlertTriangle className="h-4 w-4 text-red-500 mr-1" />
+                    Failed: {uploadProgress.failed}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {!files.length && !isUploading && (
+              <div className="mt-4 flex justify-center">
+                <Button onClick={() => document.querySelector<HTMLInputElement>('input[type="file"]')?.click()}>
+                  <File className="h-4 w-4 mr-2" />
+                  Select Files
+                </Button>
+              </div>
+            )}
+          </CardContent>
+          <CardFooter className="flex justify-between">
+            <Button
+              variant="outline"
+              onClick={() => navigate('/candidates')}
+              disabled={isUploading}
             >
               Cancel
             </Button>
-            <Button onClick={handleConfirmAssign}>
-              Assign Candidates
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-      
-      {/* Update Pipeline Stage Dialog */}
-      <Dialog open={showPipelineDialog} onOpenChange={setShowPipelineDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Update Pipeline Stage</DialogTitle>
-            <DialogDescription>
-              Select a new pipeline stage for the {selectedCandidates.length} selected candidate{selectedCandidates.length !== 1 && 's'}.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label htmlFor="stage-select" className="text-sm font-medium">
-                Select Stage
-              </label>
-              <Select value={selectedPipelineStage} onValueChange={setSelectedPipelineStage}>
-                <SelectTrigger id="stage-select">
-                  <SelectValue placeholder="Select a pipeline stage" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="new_candidate">New Candidate</SelectItem>
-                  <SelectItem value="screening">Screening</SelectItem>
-                  <SelectItem value="interview">Interview</SelectItem>
-                  <SelectItem value="offer">Offer</SelectItem>
-                  <SelectItem value="hired">Hired</SelectItem>
-                  <SelectItem value="rejected">Rejected</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button 
-              variant="outline" 
-              onClick={() => setShowPipelineDialog(false)}
+            <Button
+              onClick={handleUpload}
+              disabled={files.length === 0 || isUploading}
             >
-              Cancel
+              {isUploading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                'Upload & Process'
+              )}
             </Button>
-            <Button onClick={handleConfirmPipelineChange}>
-              Update Stage
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+          </CardFooter>
+        </Card>
+      </div>
     </MainLayout>
   );
 }
-
-// Import Supabase client
-import { supabase } from '@/integrations/supabase/client';
-// Import PipelineStage type
-import { PipelineStage } from '@/types';
