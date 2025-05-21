@@ -11,15 +11,8 @@ export type NoteType = 'general' | 'interview' | 'feedback' | 'rejection' | 'oth
 export type PipelineStage = 
   'new_candidate' | 
   'screening' | 
-  'interview_scheduled' | 
-  'interview_completed' | 
-  'technical_assessment' | 
-  'reference_check' | 
-  'offer_pending' | 
-  'offer_sent' | 
-  'offer_accepted' | 
-  'offer_rejected' | 
-  'onboarding' | 
+  'interview' | 
+  'offer' | 
   'hired' | 
   'rejected';
 

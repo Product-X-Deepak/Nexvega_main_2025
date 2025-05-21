@@ -1,4 +1,3 @@
-
 import { Json } from '@/integrations/supabase/types';
 import { 
   Candidate, 
@@ -112,15 +111,8 @@ export function validatePipelineStage(stage: string): PipelineStage {
   const validStages: PipelineStage[] = [
     'new_candidate', 
     'screening', 
-    'interview_scheduled',
-    'interview_completed',
-    'technical_assessment',
-    'reference_check',
-    'offer_pending',
-    'offer_sent',
-    'offer_accepted',
-    'offer_rejected',
-    'onboarding',
+    'interview',
+    'offer',
     'hired',
     'rejected'
   ];

@@ -19,15 +19,8 @@ interface PipelineStageSelectorProps {
 const stages: { value: PipelineStage; label: string; }[] = [
   { value: 'new_candidate', label: 'New Candidate' },
   { value: 'screening', label: 'Screening' },
-  { value: 'interview_scheduled', label: 'Interview Scheduled' },
-  { value: 'interview_completed', label: 'Interview Completed' },
-  { value: 'technical_assessment', label: 'Technical Assessment' },
-  { value: 'reference_check', label: 'Reference Check' },
-  { value: 'offer_pending', label: 'Offer Pending' },
-  { value: 'offer_sent', label: 'Offer Sent' },
-  { value: 'offer_accepted', label: 'Offer Accepted' },
-  { value: 'offer_rejected', label: 'Offer Rejected' },
-  { value: 'onboarding', label: 'Onboarding' },
+  { value: 'interview', label: 'Interview' },
+  { value: 'offer', label: 'Offer' },
   { value: 'hired', label: 'Hired' },
   { value: 'rejected', label: 'Rejected' },
 ];
