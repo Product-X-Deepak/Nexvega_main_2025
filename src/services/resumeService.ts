@@ -1,6 +1,8 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import { generateEmbedding, processResume } from '@/lib/openai';
+import { extractTextFromFile } from '@/lib/resumeProcessing';
+import { Candidate } from '@/types';
 
 export async function uploadResume(file: File, userId: string) {
   try {
@@ -53,17 +55,74 @@ export async function uploadResume(file: File, userId: string) {
   }
 }
 
-async function extractTextFromFile(file: File): Promise<string> {
-  // This would normally involve file parsing based on file type
-  // For simplicity, we're assuming it's plain text
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      resolve(e.target?.result as string || '');
-    };
-    reader.onerror = (e) => {
-      reject(new Error('Failed to read file'));
-    };
-    reader.readAsText(file);
-  });
+// Add the missing function for processing multiple resumes
+export async function processMultipleResumes(files: File[]): Promise<{ processed: any[], failed: any[] }> {
+  const processed: any[] = [];
+  const failed: any[] = [];
+  
+  for (const file of files) {
+    try {
+      // Extract text from the file
+      const text = await extractTextFromFile(file);
+      
+      // Parse the resume text to extract structured data
+      const candidateData = await processResume(text);
+      
+      processed.push({
+        filename: file.name,
+        candidateData,
+        resumeText: text
+      });
+    } catch (error) {
+      failed.push({
+        filename: file.name,
+        error: (error as Error).message
+      });
+    }
+  }
+  
+  return { processed, failed };
 }
+
+// Add the missing function for saving processed candidates
+export async function saveProcessedCandidate(candidateData: any) {
+  try {
+    // Generate embedding for the candidate
+    const resumeTextForEmbedding = `
+      ${candidateData.full_name || ''} 
+      ${candidateData.resume_summary || ''} 
+      ${candidateData.skills?.join(' ') || ''} 
+      ${candidateData.experience?.map((exp: any) => 
+        `${exp.title || ''} ${exp.company || ''} ${exp.responsibilities?.join(' ') || ''}`
+      ).join(' ') || ''}
+    `;
+    
+    let embedding;
+    if (resumeTextForEmbedding.trim().length > 10) {
+      embedding = await generateEmbedding(resumeTextForEmbedding);
+    }
+
+    // Remove resumeText field before inserting into the database
+    const { resumeText, ...dataToInsert } = candidateData;
+    
+    // Insert the candidate data
+    const { data, error } = await supabase
+      .from('candidates')
+      .insert({
+        ...dataToInsert,
+        embedding,
+        status: 'active',
+        pipeline_stage: 'new_candidate',
+        updated_at: new Date().toISOString()
+      })
+      .select();
+      
+    if (error) throw error;
+    
+    return data?.[0]?.id;
+  } catch (error) {
+    console.error('Error saving candidate:', error);
+    throw error;
+  }
+}
+

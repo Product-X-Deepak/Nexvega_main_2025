@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import ClientLayout from '@/components/layout/ClientLayout';
@@ -7,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Candidate } from '@/types';
+import { Candidate, Education, WorkExperience } from '@/types';
 import { Badge } from '@/components/ui/badge';
 
 interface CandidateWithLiked extends Partial<Candidate> {
@@ -51,16 +52,35 @@ export default function ClientCandidatesPage() {
         
       if (candidatesError) throw candidatesError;
       
-      // Add liked status to candidates
+      // Add liked status to candidates and proper type conversion
       const candidatesWithLiked = candidatesData.map(candidate => {
         return {
           ...candidate,
-          education: Array.isArray(candidate.education) ? candidate.education : [],
-          experience: Array.isArray(candidate.experience) ? candidate.experience : [],
+          education: Array.isArray(candidate.education) 
+            ? candidate.education.map((edu: any) => ({
+                institution: edu.institution || '',
+                degree: edu.degree || '',
+                field_of_study: edu.field_of_study || '',
+                start_date: edu.start_date,
+                end_date: edu.end_date,
+                grade: edu.grade
+              }))
+            : [],
+          experience: Array.isArray(candidate.experience) 
+            ? candidate.experience.map((exp: any) => ({
+                company: exp.company || '',
+                title: exp.title || '',
+                location: exp.location,
+                start_date: exp.start_date,
+                end_date: exp.end_date,
+                current: exp.current || false,
+                responsibilities: exp.responsibilities || []
+              }))
+            : [],
           skills: Array.isArray(candidate.skills) ? candidate.skills : [],
           liked: clientData.liked_candidates?.includes(candidate.id) || false
-        };
-      }) as CandidateWithLiked[];
+        } as CandidateWithLiked;
+      });
       
       setCandidates(candidatesWithLiked);
     } catch (error) {
