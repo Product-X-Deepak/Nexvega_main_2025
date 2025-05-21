@@ -8,13 +8,17 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Candidate } from '@/types';
+import { Candidate } from '@/lib/supabase';
 import { Badge } from '@/components/ui/badge';
+
+interface CandidateWithLiked extends Partial<Candidate> {
+  liked?: boolean;
+}
 
 export default function ClientCandidatesPage() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [candidates, setCandidates] = useState<CandidateWithLiked[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   
@@ -43,7 +47,7 @@ export default function ClientCandidatesPage() {
       // Now fetch the candidate data
       const { data: candidatesData, error: candidatesError } = await supabase
         .from('candidates')
-        .select('id, skills, resume_summary, education, experience, pipeline_stage')
+        .select('id, skills, resume_summary, education, experience, pipeline_stage, status, created_at, updated_at')
         .in('id', clientData.assigned_candidates);
         
       if (candidatesError) throw candidatesError;
@@ -52,7 +56,7 @@ export default function ClientCandidatesPage() {
       const candidatesWithLiked = candidatesData.map(candidate => ({
         ...candidate,
         liked: clientData.liked_candidates?.includes(candidate.id) || false
-      }));
+      })) as CandidateWithLiked[];
       
       setCandidates(candidatesWithLiked);
     } catch (error) {
