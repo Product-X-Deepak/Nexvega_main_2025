@@ -60,11 +60,11 @@ export default function Login() {
             <div className="w-full flex justify-center">
               <img
                 className="h-16 w-auto mb-3"
-                src="/placeholder.svg"
-                alt="ATS System"
+                src="/logo.svg"
+                alt="NexVega ATS"
               />
             </div>
-            <CardTitle className="text-2xl font-bold text-center">Applicant Tracking System</CardTitle>
+            <CardTitle className="text-2xl font-bold text-center">NexVega Applicant Tracking System</CardTitle>
             <CardDescription className="text-center">
               Sign in to access your recruitment dashboard
             </CardDescription>
@@ -142,7 +142,7 @@ export default function Login() {
                 Contact your administrator if you need access or forgot your password.
               </p>
               <p className="text-xs text-muted-foreground">
-                Secure enterprise-grade applicant tracking system
+                NexVega - Secure enterprise-grade applicant tracking system
               </p>
             </div>
           </CardFooter>
