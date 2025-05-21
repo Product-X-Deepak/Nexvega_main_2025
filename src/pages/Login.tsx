@@ -15,7 +15,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { Shield, AtSign, KeyRound, Loader2 } from 'lucide-react';
 
-export default function Login() {
+const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -165,4 +165,6 @@ export default function Login() {
       </div>
     </div>
   );
-}
+};
+
+export default Login;

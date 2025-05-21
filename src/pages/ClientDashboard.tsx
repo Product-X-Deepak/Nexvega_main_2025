@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import MainLayout from '@/components/layout/MainLayout';
@@ -6,25 +7,37 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Client } from '@/types';
 
-export default function ClientDashboard() {
+const ClientDashboard: React.FC = () => {
   const { clientId } = useParams<{ clientId: string }>();
   const [client, setClient] = useState<Client | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchClientData = async () => {
       if (clientId) {
-        const { data: clientData } = await supabase
-          .from('clients')
-          .select('*')
-          .eq('id', clientId)
-          .single();
+        try {
+          const { data: clientData, error } = await supabase
+            .from('clients')
+            .select('*')
+            .eq('id', clientId)
+            .single();
 
-        if (clientData) {
-          // Convert the status to the correct type
-          setClient({
-            ...clientData,
-            status: clientData.status === 'active' ? 'active' : 'inactive'
-          } as Client);
+          if (error) {
+            console.error('Error fetching client data:', error);
+            return;
+          }
+
+          if (clientData) {
+            // Convert the status to the correct type
+            setClient({
+              ...clientData,
+              status: clientData.status === 'active' ? 'active' : 'inactive'
+            } as Client);
+          }
+        } catch (err) {
+          console.error('Failed to fetch client data:', err);
+        } finally {
+          setLoading(false);
         }
       }
     };
@@ -32,10 +45,23 @@ export default function ClientDashboard() {
     fetchClientData();
   }, [clientId]);
 
+  if (loading) {
+    return (
+      <MainLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+        </div>
+      </MainLayout>
+    );
+  }
+
   if (!client) {
     return (
       <MainLayout>
-        <div>Loading client data...</div>
+        <div className="text-center py-10">
+          <h2 className="text-xl font-semibold">Client not found</h2>
+          <p className="text-muted-foreground mt-2">The requested client data could not be found.</p>
+        </div>
       </MainLayout>
     );
   }
@@ -76,4 +102,6 @@ export default function ClientDashboard() {
       </div>
     </MainLayout>
   );
-}
+};
+
+export default ClientDashboard;
