@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import MainLayout from '@/components/layout/MainLayout';
@@ -54,6 +55,9 @@ import {
   DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu';
 
+// Define a type for badge variants that matches the available options
+type BadgeVariant = "default" | "destructive" | "outline" | "secondary";
+
 const CandidatesPage = () => {
   const navigate = useNavigate();
   const [candidates, setCandidates] = useState<Candidate[]>([]);
@@ -84,7 +88,7 @@ const CandidatesPage = () => {
       
       // Apply search if provided
       if (searchQuery) {
-        query = query.or(`name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%,phone.ilike.%${searchQuery}%`);
+        query = query.or(`full_name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%,phone.ilike.%${searchQuery}%`);
       }
       
       // Apply filters if provided
@@ -157,16 +161,16 @@ const CandidatesPage = () => {
     setCurrentPage(page);
   };
 
-  const getStatusBadgeVariant = (status: string) => {
+  const getStatusBadgeVariant = (status: string): BadgeVariant => {
     switch (status.toLowerCase()) {
       case 'active':
         return 'default';
       case 'contacted':
         return 'secondary';
       case 'interviewing':
-        return 'info';
+        return 'secondary';
       case 'hired':
-        return 'success';
+        return 'default'; // Changed from 'success' to 'default'
       case 'rejected':
         return 'destructive';
       default:
@@ -281,7 +285,7 @@ const CandidatesPage = () => {
                   <TableHead className="w-[250px]">
                     <Button 
                       variant="ghost" 
-                      onClick={() => handleSort('name')}
+                      onClick={() => handleSort('full_name')}
                       className="flex items-center"
                     >
                       Name
@@ -345,8 +349,8 @@ const CandidatesPage = () => {
                 ) : (
                   candidates.map((candidate) => (
                     <TableRow key={candidate.id} className="cursor-pointer hover:bg-muted/50" onClick={() => navigate(`/candidates/${candidate.id}`)}>
-                      <TableCell className="font-medium">{candidate.name}</TableCell>
-                      <TableCell>{candidate.current_job_title || 'N/A'}</TableCell>
+                      <TableCell className="font-medium">{candidate.full_name}</TableCell>
+                      <TableCell>{candidate.experience?.[0]?.title || 'N/A'}</TableCell>
                       <TableCell>{candidate.email}</TableCell>
                       <TableCell>{candidate.phone || 'N/A'}</TableCell>
                       <TableCell>
@@ -410,16 +414,24 @@ const CandidatesPage = () => {
               <PaginationContent>
                 <PaginationItem>
                   <PaginationPrevious 
-                    onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
-                    disabled={currentPage === 1}
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handlePageChange(Math.max(1, currentPage - 1));
+                    }}
+                    className={currentPage === 1 ? "pointer-events-none opacity-50" : ""}
                   />
                 </PaginationItem>
                 
                 {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                   <PaginationItem key={page}>
                     <PaginationLink
+                      href="#"
                       isActive={page === currentPage}
-                      onClick={() => handlePageChange(page)}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handlePageChange(page);
+                      }}
                     >
                       {page}
                     </PaginationLink>
@@ -428,8 +440,12 @@ const CandidatesPage = () => {
                 
                 <PaginationItem>
                   <PaginationNext 
-                    onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
-                    disabled={currentPage === totalPages}
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handlePageChange(Math.min(totalPages, currentPage + 1));
+                    }}
+                    className={currentPage === totalPages ? "pointer-events-none opacity-50" : ""}
                   />
                 </PaginationItem>
               </PaginationContent>
