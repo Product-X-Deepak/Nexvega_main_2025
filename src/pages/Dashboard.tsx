@@ -54,9 +54,11 @@ export default function Dashboard() {
           .from('jobs')
           .select('id', { count: 'exact', head: true });
           
+        // Count candidates with resume files instead of querying non-existent "resumes" table
         const { data: resumesCount } = await supabase
-          .from('resumes')
-          .select('id', { count: 'exact', head: true });
+          .from('candidates')
+          .select('id', { count: 'exact', head: true })
+          .not('resume_url', 'is', null);
         
         // For demo, we'll set placeholder values
         setStats({
