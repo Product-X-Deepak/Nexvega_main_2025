@@ -13,6 +13,7 @@ import CandidateFormPage from './pages/CandidateFormPage';
 import CandidateProfilePage from './pages/CandidateProfilePage';
 import CandidateUploadPage from './pages/CandidateUploadPage';
 import ClientDashboard from './pages/ClientDashboard';
+import ClientFormPage from './pages/ClientFormPage';
 import NotFound from './pages/NotFound';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import HelpPage from './pages/HelpPage';
@@ -51,7 +52,10 @@ function App() {
           <Route path="/candidates/new" element={<CandidateFormPage />} />
           <Route path="/candidates/upload" element={<CandidateUploadPage />} />
           <Route path="/candidates/:id" element={<CandidateProfilePage />} />
+          <Route path="/candidates/:id/edit" element={<CandidateFormPage isEdit={true} />} />
           <Route path="/clients" element={<ClientsPage />} />
+          <Route path="/clients/new" element={<ClientFormPage />} />
+          <Route path="/clients/:id" element={<ClientFormPage />} />
           <Route path="/jobs" element={<JobsPage />} />
           <Route path="/ai-assistant" element={<ChatAssistantPage />} />
         </>

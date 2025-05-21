@@ -8,3 +8,5 @@ export { Skeleton } from "./skeleton";
 export { Separator } from "./separator";
 export { Textarea } from "./textarea";
 export { Loading } from "./loading";
+export { Input } from "./input";
+export { Label } from "./label";
