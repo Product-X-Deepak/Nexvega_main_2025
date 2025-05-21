@@ -1,6 +1,7 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { v4 as uuidv4 } from 'uuid';
+import { Json } from '@/integrations/supabase/types';
+import { Candidate, Education, WorkExperience, Project, Publication } from '@/types';
 
 export enum FileType {
   PDF = 'application/pdf',
@@ -213,6 +214,56 @@ export async function processMultipleResumes(files: File[], userId: string): Pro
   return { processed, failed };
 }
 
+// Convert application type to database type
+function convertToDbType(data: any): any {
+  if (!data) return data;
+  
+  // Convert Candidate education array to JSON
+  if (data.education && Array.isArray(data.education)) {
+    data.education = data.education as Json;
+  }
+  
+  // Convert Candidate experience array to JSON
+  if (data.experience && Array.isArray(data.experience)) {
+    data.experience = data.experience as Json;
+  }
+  
+  // Convert Candidate projects array to JSON
+  if (data.projects && Array.isArray(data.projects)) {
+    data.projects = data.projects as Json;
+  }
+  
+  // Convert Candidate publications array to JSON
+  if (data.publications && Array.isArray(data.publications)) {
+    data.publications = data.publications as Json;
+  }
+  
+  // Convert Candidate social_media object to JSON
+  if (data.social_media && typeof data.social_media === 'object') {
+    data.social_media = data.social_media as Json;
+  }
+  
+  // Ensure pipeline_stage is valid enum value
+  if (data.pipeline_stage && typeof data.pipeline_stage === 'string') {
+    // Default to 'new_candidate' if not a valid stage
+    const validStages = ['new_candidate', 'screening', 'interview', 'offer', 'hired', 'rejected'];
+    data.pipeline_stage = validStages.includes(data.pipeline_stage) 
+      ? data.pipeline_stage 
+      : 'new_candidate';
+  }
+  
+  return data;
+}
+
+// Convert database type to application type
+function convertFromDbType(data: any): any {
+  if (!data) return data;
+  
+  // Handle education, experience, projects, publications, and social_media
+  // by ensuring they're properly typed for the application
+  return data;
+}
+
 export async function saveProcessedCandidate(candidateData: any, userId: string) {
   try {
     console.log('Saving candidate to database:', candidateData);
@@ -228,7 +279,7 @@ export async function saveProcessedCandidate(candidateData: any, userId: string)
     `;
     
     // Prepare data for insertion
-    const dataToInsert = {
+    const dataToInsert = convertToDbType({
       full_name: candidateData.full_name || null,
       email: candidateData.email || null,
       phone: candidateData.phone || null,
@@ -249,7 +300,7 @@ export async function saveProcessedCandidate(candidateData: any, userId: string)
       pipeline_stage: 'new_candidate',
       created_by: userId,
       updated_at: new Date().toISOString()
-    };
+    });
     
     // Insert the candidate data
     const { data, error } = await supabase

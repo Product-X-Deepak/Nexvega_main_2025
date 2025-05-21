@@ -7,6 +7,24 @@ import {
   processMultipleResumes as processBulkResumes,
   saveProcessedCandidate as saveCandidate 
 } from '@/lib/resumeProcessing';
+import { Json } from '@/integrations/supabase/types';
+
+// Convert database types to application types
+function convertToAppType(data: any): Candidate {
+  if (!data) return data;
+  
+  // Ensure complex objects are properly typed for the application
+  const candidate: Candidate = {
+    ...data,
+    // Convert JSON objects back to typed arrays if needed
+    education: (data.education || []) as Candidate['education'],
+    experience: (data.experience || []) as Candidate['experience'],
+    projects: (data.projects || []) as Candidate['projects'],
+    publications: (data.publications || []) as Candidate['publications']
+  };
+  
+  return candidate;
+}
 
 // Process and upload a single resume
 export async function uploadResume(file: File, userId: string) {
@@ -25,13 +43,22 @@ export async function uploadResume(file: File, userId: string) {
     };
     
     // Insert the data into the database
-    const { data: candidate, error: candidateError } = await supabase
+    const { data: dbCandidate, error: candidateError } = await supabase
       .from('candidates')
-      .insert(candidateData)
+      .insert({
+        ...candidateData,
+        education: candidateData.education as unknown as Json,
+        experience: candidateData.experience as unknown as Json,
+        projects: candidateData.projects as unknown as Json,
+        publications: candidateData.publications as unknown as Json,
+        social_media: candidateData.social_media as unknown as Json,
+      })
       .select()
       .single();
       
     if (candidateError) throw candidateError;
+    
+    const candidate = convertToAppType(dbCandidate);
     
     // Generate embedding for search functionality
     if (resumeText && resumeText.length > 10 && candidate?.id) {
@@ -102,7 +129,7 @@ export async function getCandidateById(id: string): Promise<Candidate> {
       .single();
       
     if (error) throw error;
-    return data as Candidate;
+    return convertToAppType(data);
   } catch (error) {
     console.error('Error fetching candidate:', error);
     throw error;
@@ -112,17 +139,25 @@ export async function getCandidateById(id: string): Promise<Candidate> {
 // Update candidate
 export async function updateCandidate(id: string, updates: Partial<Candidate>) {
   try {
+    // Transform complex objects for database storage
+    const dbUpdates = {
+      ...updates,
+      updated_at: new Date().toISOString(),
+      education: updates.education as unknown as Json,
+      experience: updates.experience as unknown as Json,
+      projects: updates.projects as unknown as Json,
+      publications: updates.publications as unknown as Json,
+      social_media: updates.social_media as unknown as Json,
+    };
+
     const { data, error } = await supabase
       .from('candidates')
-      .update({
-        ...updates,
-        updated_at: new Date().toISOString()
-      })
+      .update(dbUpdates)
       .eq('id', id)
       .select();
       
     if (error) throw error;
-    return data[0] as Candidate;
+    return convertToAppType(data[0]);
   } catch (error) {
     console.error('Error updating candidate:', error);
     throw error;
