@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import MainLayout from '@/components/layout/MainLayout';
@@ -73,6 +72,7 @@ import { format, parseISO } from 'date-fns';
 import CandidateNotes from '@/components/candidates/CandidateNotes';
 import PipelineStageSelector from '@/components/candidates/PipelineStageSelector';
 import ClientAssignment from '@/components/candidates/ClientAssignment';
+import { convertToCandidate, convertToCandidateNotes } from '@/utils/typeHelpers';
 
 export default function CandidateProfilePage() {
   const { id } = useParams<{id: string}>();
@@ -102,7 +102,7 @@ export default function CandidateProfilePage() {
         .single();
         
       if (error) throw error;
-      setCandidate(data);
+      setCandidate(convertToCandidate(data));
     } catch (error) {
       console.error('Error fetching candidate:', error);
       toast({
@@ -122,6 +122,7 @@ export default function CandidateProfilePage() {
         .from('candidate_notes')
         .select(`
           id,
+          candidate_id,
           content,
           type,
           created_at,
@@ -136,7 +137,7 @@ export default function CandidateProfilePage() {
         .order('created_at', { ascending: false });
         
       if (error) throw error;
-      setNotes(data);
+      setNotes(convertToCandidateNotes(data));
     } catch (error) {
       console.error('Error fetching candidate notes:', error);
     } finally {
@@ -209,7 +210,7 @@ export default function CandidateProfilePage() {
     }
   };
   
-  const handleAddNote = async (newNote: Omit<CandidateNote, 'id' | 'created_at' | 'updated_at'>) => {
+  const handleAddNote = async (newNote: Omit<CandidateNote, 'id' | 'created_at' | 'updated_at' | 'profiles'>) => {
     if (!candidate?.id) return;
     
     try {
@@ -223,6 +224,7 @@ export default function CandidateProfilePage() {
         })
         .select(`
           id,
+          candidate_id,
           content,
           type,
           created_at,
@@ -236,7 +238,19 @@ export default function CandidateProfilePage() {
         
       if (error) throw error;
       
-      setNotes(prev => [data[0], ...prev]);
+      // Make sure we have the correct type
+      const newNoteWithCorrectType: CandidateNote = {
+        id: data[0].id,
+        candidate_id: data[0].candidate_id,
+        user_id: data[0].user_id,
+        content: data[0].content,
+        type: data[0].type,
+        created_at: data[0].created_at,
+        updated_at: data[0].updated_at,
+        profiles: data[0].profiles
+      };
+      
+      setNotes(prev => [newNoteWithCorrectType, ...prev]);
       
       toast({
         title: 'Note added',

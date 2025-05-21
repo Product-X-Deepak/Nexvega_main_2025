@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import MainLayout from '@/components/layout/MainLayout';
@@ -68,7 +67,7 @@ export default function CandidatesPage() {
 
       if (error) throw error;
       
-      setCandidates(data || []);
+      setCandidates(convertToCandidates(data || []));
     } catch (error) {
       console.error('Error fetching candidates:', error);
       toast({

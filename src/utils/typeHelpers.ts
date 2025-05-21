@@ -89,7 +89,7 @@ export function convertToCandidate(data: any): Candidate {
     projects: convertToProjects(data.projects),
     publications: convertToPublications(data.publications),
     social_media: convertToSocialMedia(data.social_media),
-    pipeline_stage: data.pipeline_stage as PipelineStage,
+    pipeline_stage: validatePipelineStage(data.pipeline_stage),
     status: data.status as Candidate['status']
   };
 }
@@ -100,10 +100,9 @@ export function convertToCandidates(data: any[]): Candidate[] {
 }
 
 // Helper function to convert database notes to typed CandidateNote array
-export function convertToCandidateNotes(data: any[], candidateId: string): CandidateNote[] {
+export function convertToCandidateNotes(data: any[]): CandidateNote[] {
   return data.map(note => ({
     ...note,
-    candidate_id: candidateId,
     type: note.type as CandidateNote['type']
   }));
 }

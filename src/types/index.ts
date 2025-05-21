@@ -1,4 +1,3 @@
-
 export type UserRole = 'admin' | 'staff' | 'client';
 
 export type CandidateStatus = 'active' | 'inactive' | 'blocked' | 'unavailable';
@@ -144,6 +143,10 @@ export interface CandidateNote {
   created_at: string;
   updated_at: string;
   type: NoteType;
+  profiles?: {
+    full_name: string;
+    email: string;
+  };
 }
 
 export interface RejectionReason {

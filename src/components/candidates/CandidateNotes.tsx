@@ -20,7 +20,7 @@ interface CandidateNotesProps {
   notes: CandidateNote[];
   candidateId: string;
   loading: boolean;
-  onAddNote: (note: Omit<CandidateNote, 'id' | 'created_at' | 'updated_at'>) => Promise<void>;
+  onAddNote: (note: Omit<CandidateNote, 'id' | 'created_at' | 'updated_at' | 'profiles'>) => Promise<void>;
 }
 
 const noteTypeOptions: { value: NoteType; label: string; }[] = [
