@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -8,19 +8,43 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Label } from '@/components/ui/label';
 import { Loader2, Lock, User, LogIn } from 'lucide-react';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
+import { useNavigate } from 'react-router-dom';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { signIn } = useAuth();
+  const { signIn, user, userRole } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
+
+  // If already logged in, redirect to appropriate dashboard
+  useEffect(() => {
+    if (user) {
+      if (userRole === 'client') {
+        navigate('/client');
+      } else {
+        navigate('/dashboard');
+      }
+    }
+  }, [user, userRole, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
     try {
+      // Validate inputs
+      if (!email.trim() || !password.trim()) {
+        toast({
+          title: 'Input Error',
+          description: 'Email and password are required',
+          variant: 'destructive',
+        });
+        setIsLoading(false);
+        return;
+      }
+
       const { error } = await signIn(email, password);
       
       if (error) {
@@ -29,7 +53,6 @@ export default function Login() {
           description: error,
           variant: 'destructive',
         });
-        setIsLoading(false);
         return;
       }
 
@@ -45,6 +68,7 @@ export default function Login() {
         description: 'An unexpected error occurred during login',
         variant: 'destructive',
       });
+    } finally {
       setIsLoading(false);
     }
   };

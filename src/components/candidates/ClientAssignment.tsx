@@ -52,7 +52,15 @@ const ClientAssignment: React.FC<ClientAssignmentProps> = ({
         .order('company_name');
         
       if (error) throw error;
-      setClients(data || []);
+      
+      // Make sure we're handling the types correctly
+      if (data) {
+        const typedClients = data.map((client: any) => ({
+          ...client,
+          status: client.status as 'active' | 'inactive'
+        }));
+        setClients(typedClients);
+      }
     } catch (error) {
       console.error('Error fetching clients:', error);
       toast({

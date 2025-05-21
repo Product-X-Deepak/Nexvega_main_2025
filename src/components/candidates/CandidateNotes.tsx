@@ -1,15 +1,7 @@
 
 import React, { useState } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -17,11 +9,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Separator } from '@/components/ui/separator';
-import { NoteType, CandidateNote } from '@/types';
-import { MessageCircle, Send, AlertCircle, CheckCircle, Phone, Star, AlertTriangle, Loader2 } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
+import { CandidateNote, NoteType } from '@/types';
+import { format, parseISO } from 'date-fns';
+import { useAuth } from '@/contexts/AuthContext';
+import { MessageCircle, Loader2, PlusCircle } from 'lucide-react';
+import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 
 interface CandidateNotesProps {
   notes: CandidateNote[];
@@ -30,171 +23,164 @@ interface CandidateNotesProps {
   onAddNote: (note: Omit<CandidateNote, 'id' | 'created_at' | 'updated_at'>) => Promise<void>;
 }
 
-const noteTypes: Array<{ value: NoteType; label: string; icon: React.ReactNode }> = [
-  { value: 'general', label: 'General Note', icon: <MessageCircle className="h-4 w-4" /> },
-  { value: 'interview', label: 'Interview Note', icon: <Phone className="h-4 w-4" /> },
-  { value: 'feedback', label: 'Feedback', icon: <Star className="h-4 w-4" /> },
-  { value: 'rejection', label: 'Rejection', icon: <AlertTriangle className="h-4 w-4" /> },
-  { value: 'other', label: 'Other', icon: <AlertCircle className="h-4 w-4" /> },
+const noteTypeOptions: { value: NoteType; label: string; }[] = [
+  { value: 'general', label: 'General' },
+  { value: 'interview', label: 'Interview' },
+  { value: 'feedback', label: 'Feedback' },
+  { value: 'rejection', label: 'Rejection' },
+  { value: 'other', label: 'Other' },
 ];
-
-const getInitials = (name: string | undefined): string => {
-  if (!name) return 'U';
-  return name
-    .split(' ')
-    .map(n => n[0])
-    .join('')
-    .toUpperCase()
-    .substring(0, 2);
-};
 
 const CandidateNotes: React.FC<CandidateNotesProps> = ({ 
   notes, 
   candidateId, 
-  loading,
+  loading, 
   onAddNote 
 }) => {
   const { user } = useAuth();
   const [content, setContent] = useState('');
   const [noteType, setNoteType] = useState<NoteType>('general');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
+  const [submitting, setSubmitting] = useState(false);
+  
   const handleSubmit = async () => {
-    if (!content.trim() || !user?.id || isSubmitting) return;
+    if (!content.trim() || !user?.id) return;
     
-    setIsSubmitting(true);
+    setSubmitting(true);
+    
     try {
       await onAddNote({
         candidate_id: candidateId,
         user_id: user.id,
-        content,
+        content: content.trim(),
         type: noteType
       });
       
+      // Clear form after successful submission
       setContent('');
+      setNoteType('general');
+    } catch (error) {
+      console.error('Error adding note:', error);
     } finally {
-      setIsSubmitting(false);
+      setSubmitting(false);
     }
   };
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-lg">Add Note</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium mb-1.5 block">Note Type</label>
-              <Select 
-                value={noteType} 
-                onValueChange={(value) => setNoteType(value as NoteType)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select note type" />
-                </SelectTrigger>
-                <SelectContent>
-                  {noteTypes.map((type) => (
-                    <SelectItem key={type.value} value={type.value}>
-                      <div className="flex items-center">
-                        {type.icon}
-                        <span className="ml-2">{type.label}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div>
-              <label className="text-sm font-medium mb-1.5 block" htmlFor="note-content">
-                Note Content
-              </label>
-              <Textarea
-                id="note-content"
-                placeholder="Enter your note here..."
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                className="min-h-32 resize-none"
-              />
-            </div>
-          </div>
-        </CardContent>
-        <CardFooter>
-          <Button 
-            type="button" 
-            onClick={handleSubmit} 
-            disabled={!content.trim() || isSubmitting}
-            className="ml-auto"
-          >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Send className="mr-2 h-4 w-4" />
-                Add Note
-              </>
-            )}
-          </Button>
-        </CardFooter>
-      </Card>
-      
+      {/* Add note form */}
       <div className="space-y-4">
-        <h3 className="text-lg font-medium">Notes & Activity</h3>
+        <h3 className="text-lg font-medium">Add Note</h3>
+        <div className="grid grid-cols-1 gap-3">
+          <Textarea
+            placeholder="Enter your note..."
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            className="min-h-[100px]"
+          />
+          
+          <div className="flex items-center gap-3">
+            <Select
+              value={noteType}
+              onValueChange={(value) => setNoteType(value as NoteType)}
+            >
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Note type" />
+              </SelectTrigger>
+              <SelectContent>
+                {noteTypeOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            
+            <Button 
+              onClick={handleSubmit}
+              disabled={!content.trim() || submitting}
+              className="ml-auto"
+            >
+              {submitting ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <PlusCircle className="h-4 w-4 mr-2" />
+              )}
+              Add Note
+            </Button>
+          </div>
+        </div>
+      </div>
+      
+      <Separator />
+      
+      {/* Notes list */}
+      <div>
+        <h3 className="text-lg font-medium mb-4">Notes History</h3>
         
         {loading ? (
-          <div className="flex items-center justify-center p-8">
-            <Loader2 className="h-8 w-8 text-primary animate-spin" />
+          <div className="space-y-4">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="p-4 border rounded-md animate-pulse">
+                <div className="h-4 bg-muted rounded w-1/4 mb-2"></div>
+                <div className="h-3 bg-muted rounded w-1/3 mb-4"></div>
+                <div className="space-y-2">
+                  <div className="h-3 bg-muted rounded w-full"></div>
+                  <div className="h-3 bg-muted rounded w-5/6"></div>
+                </div>
+              </div>
+            ))}
           </div>
         ) : notes.length > 0 ? (
           <div className="space-y-4">
-            {notes.map((note) => (
-              <Card key={note.id}>
-                <CardHeader className="pb-2">
-                  <div className="flex justify-between items-start">
+            {notes.map((note) => {
+              // Find the matching note type to display the label
+              const noteTypeObj = noteTypeOptions.find(t => t.value === note.type);
+              // Format the date
+              const formattedDate = format(parseISO(note.created_at), 'MMM d, yyyy h:mm a');
+              
+              return (
+                <div 
+                  key={note.id} 
+                  className={cn(
+                    "p-4 border rounded-md",
+                    note.type === 'feedback' && "bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-900",
+                    note.type === 'interview' && "bg-purple-50 border-purple-200 dark:bg-purple-950 dark:border-purple-900",
+                    note.type === 'rejection' && "bg-red-50 border-red-200 dark:bg-red-950 dark:border-red-900"
+                  )}
+                >
+                  <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center">
-                      <Avatar className="h-8 w-8 mr-2">
-                        <AvatarFallback>
-                          {getInitials((note as any).profiles?.full_name)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <CardTitle className="text-base">
-                          {(note as any).profiles?.full_name || 'Unknown User'}
-                        </CardTitle>
-                        <p className="text-xs text-muted-foreground">
-                          {note.created_at && (
-                            formatDistanceToNow(new Date(note.created_at), { addSuffix: true })
-                          )}
-                        </p>
-                      </div>
+                      <span className="font-medium">
+                        {note.profiles?.full_name || 'Unknown User'}
+                      </span>
+                      <span className={cn(
+                        "ml-2 px-2 py-0.5 text-xs rounded-full",
+                        note.type === 'general' && "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300",
+                        note.type === 'feedback' && "bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300",
+                        note.type === 'interview' && "bg-purple-100 text-purple-600 dark:bg-purple-900 dark:text-purple-300",
+                        note.type === 'rejection' && "bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-300",
+                        note.type === 'other' && "bg-amber-100 text-amber-600 dark:bg-amber-900 dark:text-amber-300"
+                      )}>
+                        {noteTypeObj?.label || note.type}
+                      </span>
                     </div>
-                    
-                    {/* Note type badge */}
-                    <div className="flex items-center text-xs bg-muted px-2 py-1 rounded-md">
-                      {noteTypes.find(t => t.value === note.type)?.icon}
-                      <span className="ml-1 capitalize">{note.type}</span>
-                    </div>
+                    <span className="text-xs text-muted-foreground">
+                      {formattedDate}
+                    </span>
                   </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="whitespace-pre-line text-sm">
+                  <div className="whitespace-pre-wrap text-sm">
                     {note.content}
                   </div>
-                </CardContent>
-              </Card>
-            ))}
+                </div>
+              );
+            })}
           </div>
         ) : (
-          <div className="text-center py-12">
+          <div className="text-center py-8">
             <MessageCircle className="h-12 w-12 text-muted-foreground/50 mx-auto mb-3" />
-            <h3 className="text-lg font-medium">No Notes Yet</h3>
+            <h4 className="text-lg font-medium">No Notes Yet</h4>
             <p className="text-muted-foreground">
-              Add the first note about this candidate.
+              Be the first to add notes about this candidate
             </p>
           </div>
         )}

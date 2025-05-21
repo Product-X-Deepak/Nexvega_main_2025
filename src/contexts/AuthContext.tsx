@@ -44,13 +44,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('role, full_name, email')
+        .select('role, full_name, email, company, position, phone, is_active')
         .eq('id', userId)
         .single();
 
       if (error) throw error;
       
-      setUserRole(data?.role || null);
+      if (data) {
+        // Validate that we have a proper role
+        const role = data.role as UserRole;
+        setUserRole(role);
+        
+        // Update user object with profile data for convenience
+        setUser(prev => ({
+          ...prev,
+          ...data
+        }));
+      }
+      
       return data?.role;
     } catch (error) {
       console.error('Error fetching user profile:', error);
@@ -68,7 +79,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       if (error) throw error;
       
+      // Set basic user info immediately
       setUser(data.user);
+      
+      // Get extended profile info
       const role = await getUserProfile(data.user?.id);
       
       toast({
@@ -130,8 +144,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   useEffect(() => {
+    // Check for existing session on component mount
     checkSession();
     
+    // Set up auth state listener for real-time updates
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session?.user) {
         setUser(session.user);
@@ -150,6 +166,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
     });
     
+    // Cleanup subscription on unmount
     return () => {
       subscription.unsubscribe();
     };
@@ -158,16 +175,28 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Add an additional effect for navigation logic based on auth state
   useEffect(() => {
     if (!loading) {
-      if (!user && window.location.pathname !== '/login' && 
+      // Redirect unauthenticated users to login
+      // Except for public routes like login, privacy policy, etc.
+      if (!user && 
+          window.location.pathname !== '/login' && 
           window.location.pathname !== '/privacy-policy' && 
           window.location.pathname !== '/help') {
         navigate('/login');
-      } else if (user && window.location.pathname === '/login') {
+      }
+      // Redirect authenticated users to appropriate dashboard when on login page
+      else if (user && window.location.pathname === '/login') {
         if (userRole === 'client') {
           navigate('/client');
         } else {
           navigate('/dashboard');
         }
+      }
+      // Redirect users to appropriate section based on role
+      else if (user && userRole === 'client' && !window.location.pathname.startsWith('/client')) {
+        navigate('/client');
+      }
+      else if (user && userRole !== 'client' && window.location.pathname.startsWith('/client')) {
+        navigate('/dashboard');
       }
     }
   }, [user, loading, userRole, navigate]);
