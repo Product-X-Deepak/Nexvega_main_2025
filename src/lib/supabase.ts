@@ -1,5 +1,4 @@
-
-
+import { supabase as supabaseClient } from '@/integrations/supabase/client';
 import { createClient } from '@supabase/supabase-js';
 
 // These environment variables must be set in deployment environment
@@ -10,7 +9,7 @@ if (!supabaseUrl || !supabaseKey) {
   console.error('Missing Supabase environment variables. Please check your configuration.');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+export const supabase = supabaseClient;
 
 // Types for our database schema
 export type UserRole = 'admin' | 'staff' | 'client';
@@ -170,4 +169,3 @@ export async function checkAuthorization(
   if (!userRole) return false;
   return requiredRoles.includes(userRole);
 }
-
