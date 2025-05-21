@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Search, Filter, BracesAsterisk, SearchCheck, Braces } from 'lucide-react';
+import { Search, Filter, Asterisk, SearchCheck, Braces } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -98,7 +98,7 @@ const CandidatesSearch: React.FC<CandidatesSearchProps> = ({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <TabsTrigger value="boolean" className="flex items-center gap-1">
-                    <BracesAsterisk className="h-3.5 w-3.5" />
+                    <Asterisk className="h-3.5 w-3.5" />
                     <span className="hidden sm:inline">Boolean</span>
                   </TabsTrigger>
                 </TooltipTrigger>
