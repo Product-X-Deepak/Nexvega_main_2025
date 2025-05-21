@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 import { v4 as uuidv4 } from 'uuid';
 import { Json } from '@/integrations/supabase/types';
@@ -218,41 +219,43 @@ export async function processMultipleResumes(files: File[], userId: string): Pro
 function convertToDbType(data: any): any {
   if (!data) return data;
   
+  const result = { ...data };
+  
   // Convert Candidate education array to JSON
   if (data.education && Array.isArray(data.education)) {
-    data.education = data.education as Json;
+    result.education = data.education as unknown as Json;
   }
   
   // Convert Candidate experience array to JSON
   if (data.experience && Array.isArray(data.experience)) {
-    data.experience = data.experience as Json;
+    result.experience = data.experience as unknown as Json;
   }
   
   // Convert Candidate projects array to JSON
   if (data.projects && Array.isArray(data.projects)) {
-    data.projects = data.projects as Json;
+    result.projects = data.projects as unknown as Json;
   }
   
   // Convert Candidate publications array to JSON
   if (data.publications && Array.isArray(data.publications)) {
-    data.publications = data.publications as Json;
+    result.publications = data.publications as unknown as Json;
   }
   
   // Convert Candidate social_media object to JSON
   if (data.social_media && typeof data.social_media === 'object') {
-    data.social_media = data.social_media as Json;
+    result.social_media = data.social_media as unknown as Json;
   }
   
   // Ensure pipeline_stage is valid enum value
   if (data.pipeline_stage && typeof data.pipeline_stage === 'string') {
     // Default to 'new_candidate' if not a valid stage
     const validStages = ['new_candidate', 'screening', 'interview', 'offer', 'hired', 'rejected'];
-    data.pipeline_stage = validStages.includes(data.pipeline_stage) 
+    result.pipeline_stage = validStages.includes(data.pipeline_stage) 
       ? data.pipeline_stage 
       : 'new_candidate';
   }
   
-  return data;
+  return result;
 }
 
 // Convert database type to application type
@@ -261,7 +264,25 @@ function convertFromDbType(data: any): any {
   
   // Handle education, experience, projects, publications, and social_media
   // by ensuring they're properly typed for the application
-  return data;
+  const result = { ...data };
+  
+  if (data.education) {
+    result.education = data.education as unknown as Education[];
+  }
+  
+  if (data.experience) {
+    result.experience = data.experience as unknown as WorkExperience[];
+  }
+  
+  if (data.projects) {
+    result.projects = data.projects as unknown as Project[];
+  }
+  
+  if (data.publications) {
+    result.publications = data.publications as unknown as Publication[];
+  }
+  
+  return result;
 }
 
 export async function saveProcessedCandidate(candidateData: any, userId: string) {

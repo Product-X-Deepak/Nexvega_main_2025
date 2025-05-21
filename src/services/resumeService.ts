@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { Candidate } from '@/types';
 import { 
@@ -26,6 +25,37 @@ function convertToAppType(data: any): Candidate {
   return candidate;
 }
 
+// Convert application type to database type
+function convertToDbType(data: Partial<Candidate>): any {
+  if (!data) return data;
+  
+  const dbData = {
+    ...data,
+    education: data.education as unknown as Json,
+    experience: data.experience as unknown as Json,
+    projects: data.projects as unknown as Json,
+    publications: data.publications as unknown as Json,
+    social_media: data.social_media as unknown as Json,
+  };
+  
+  // Validate pipeline stage is a proper enum value
+  if (dbData.pipeline_stage) {
+    // List of valid pipeline stages from the enum type
+    const validStages = ['new_candidate', 'screening', 'interview', 'offer', 'hired', 'rejected'];
+    if (!validStages.includes(dbData.pipeline_stage)) {
+      dbData.pipeline_stage = 'new_candidate';
+    }
+  }
+  
+  // Handle embedding - convert from number[] to string if necessary
+  if (dbData.embedding && Array.isArray(dbData.embedding)) {
+    // Keep the embedding as is, since Supabase's pgvector handles it properly
+    // The type definition might be incorrect
+  }
+  
+  return dbData;
+}
+
 // Process and upload a single resume
 export async function uploadResume(file: File, userId: string) {
   try {
@@ -45,14 +75,14 @@ export async function uploadResume(file: File, userId: string) {
     // Insert the data into the database
     const { data: dbCandidate, error: candidateError } = await supabase
       .from('candidates')
-      .insert({
+      .insert(convertToDbType({
         ...candidateData,
-        education: candidateData.education as unknown as Json,
-        experience: candidateData.experience as unknown as Json,
-        projects: candidateData.projects as unknown as Json,
-        publications: candidateData.publications as unknown as Json,
-        social_media: candidateData.social_media as unknown as Json,
-      })
+        education: candidateData.education,
+        experience: candidateData.experience,
+        projects: candidateData.projects,
+        publications: candidateData.publications,
+        social_media: candidateData.social_media,
+      }))
       .select()
       .single();
       
@@ -140,15 +170,10 @@ export async function getCandidateById(id: string): Promise<Candidate> {
 export async function updateCandidate(id: string, updates: Partial<Candidate>) {
   try {
     // Transform complex objects for database storage
-    const dbUpdates = {
+    const dbUpdates = convertToDbType({
       ...updates,
-      updated_at: new Date().toISOString(),
-      education: updates.education as unknown as Json,
-      experience: updates.experience as unknown as Json,
-      projects: updates.projects as unknown as Json,
-      publications: updates.publications as unknown as Json,
-      social_media: updates.social_media as unknown as Json,
-    };
+      updated_at: new Date().toISOString()
+    });
 
     const { data, error } = await supabase
       .from('candidates')
