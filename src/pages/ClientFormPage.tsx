@@ -2,16 +2,12 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import MainLayout from '@/components/layout/MainLayout';
-import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Client } from '@/types';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
+import ClientForm from '@/components/clients/ClientForm';
+import { fetchClient, saveClient } from '@/utils/clientHelpers';
 
 export default function ClientFormPage() {
   const { id } = useParams<{ id: string }>();
@@ -35,23 +31,15 @@ export default function ClientFormPage() {
   
   useEffect(() => {
     if (isEdit && id) {
-      fetchClient(id);
+      loadClientData(id);
     }
   }, [isEdit, id]);
   
-  const fetchClient = async (clientId: string) => {
+  const loadClientData = async (clientId: string) => {
     try {
       setLoading(true);
-      
-      const { data, error } = await supabase
-        .from('clients')
-        .select('*')
-        .eq('id', clientId)
-        .single();
-        
-      if (error) throw error;
-      
-      setFormData(data as Client);
+      const data = await fetchClient(clientId);
+      setFormData(data);
     } catch (error) {
       console.error('Error fetching client:', error);
       toast({
@@ -85,38 +73,7 @@ export default function ClientFormPage() {
         return;
       }
       
-      // Ensure required fields are present
-      const clientData = {
-        company_name: formData.company_name,
-        contact_person: formData.contact_person,
-        email: formData.email,
-        phone: formData.phone || null,
-        address: formData.address || null,
-        industry: formData.industry || null,
-        status: formData.status || 'active',
-        ...(isEdit ? { updated_at: new Date().toISOString() } : { 
-          created_by: user?.id, 
-          created_at: new Date().toISOString(), 
-          updated_at: new Date().toISOString() 
-        })
-      };
-      
-      let response;
-      
-      if (isEdit && id) {
-        response = await supabase
-          .from('clients')
-          .update(clientData)
-          .eq('id', id)
-          .select();
-      } else {
-        response = await supabase
-          .from('clients')
-          .insert(clientData)
-          .select();
-      }
-      
-      const { data, error } = response;
+      const { data, error } = await saveClient(formData, isEdit, user?.id);
       
       if (error) throw error;
       
@@ -161,117 +118,13 @@ export default function ClientFormPage() {
           </p>
         </div>
         
-        <Card>
-          <form onSubmit={handleSubmit}>
-            <CardHeader>
-              <CardTitle>Client Information</CardTitle>
-            </CardHeader>
-            
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Company Name */}
-                <div className="space-y-2">
-                  <Label htmlFor="company_name">Company Name <span className="text-destructive">*</span></Label>
-                  <Input
-                    id="company_name"
-                    name="company_name"
-                    value={formData.company_name}
-                    onChange={handleChange}
-                    required
-                  />
-                </div>
-                
-                {/* Industry */}
-                <div className="space-y-2">
-                  <Label htmlFor="industry">Industry</Label>
-                  <Input
-                    id="industry"
-                    name="industry"
-                    value={formData.industry || ''}
-                    onChange={handleChange}
-                  />
-                </div>
-                
-                {/* Contact Person */}
-                <div className="space-y-2">
-                  <Label htmlFor="contact_person">Contact Person <span className="text-destructive">*</span></Label>
-                  <Input
-                    id="contact_person"
-                    name="contact_person"
-                    value={formData.contact_person}
-                    onChange={handleChange}
-                    required
-                  />
-                </div>
-                
-                {/* Email */}
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email <span className="text-destructive">*</span></Label>
-                  <Input
-                    id="email"
-                    name="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    required
-                  />
-                </div>
-                
-                {/* Phone */}
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Phone</Label>
-                  <Input
-                    id="phone"
-                    name="phone"
-                    value={formData.phone || ''}
-                    onChange={handleChange}
-                  />
-                </div>
-                
-                {/* Status */}
-                <div className="space-y-2">
-                  <Label htmlFor="status">Status</Label>
-                  <select
-                    id="status"
-                    name="status"
-                    value={formData.status}
-                    onChange={handleChange}
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                  </select>
-                </div>
-              </div>
-              
-              {/* Address */}
-              <div className="space-y-2">
-                <Label htmlFor="address">Address</Label>
-                <Textarea
-                  id="address"
-                  name="address"
-                  value={formData.address || ''}
-                  onChange={handleChange}
-                  rows={3}
-                />
-              </div>
-            </CardContent>
-            
-            <CardFooter className="flex justify-between">
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={() => navigate('/clients')}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={saving}>
-                {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {isEdit ? 'Update Client' : 'Create Client'}
-              </Button>
-            </CardFooter>
-          </form>
-        </Card>
+        <ClientForm 
+          client={formData}
+          onChange={handleChange}
+          onSubmit={handleSubmit}
+          isEdit={isEdit}
+          isSaving={saving}
+        />
       </div>
     </MainLayout>
   );

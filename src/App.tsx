@@ -17,6 +17,7 @@ import ClientFormPage from './pages/ClientFormPage';
 import NotFound from './pages/NotFound';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import HelpPage from './pages/HelpPage';
+import Index from './pages/Index';
 
 // Client pages
 import ClientCandidatesPage from './pages/ClientCandidatesPage';
@@ -43,6 +44,7 @@ function App() {
       <Route path="/login" element={!user ? <Login /> : <Navigate to={userRole === 'client' ? '/client' : '/dashboard'} />} />
       <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
       <Route path="/help" element={<HelpPage />} />
+      <Route index element={<Index />} />
       
       {/* Protected routes for Admin and Staff */}
       {user && userRole !== 'client' && (
@@ -52,7 +54,7 @@ function App() {
           <Route path="/candidates/new" element={<CandidateFormPage />} />
           <Route path="/candidates/upload" element={<CandidateUploadPage />} />
           <Route path="/candidates/:id" element={<CandidateProfilePage />} />
-          <Route path="/candidates/:id/edit" element={<CandidateFormPage isEdit={true} />} />
+          <Route path="/candidates/:id/edit" element={<CandidateFormPage />} />
           <Route path="/clients" element={<ClientsPage />} />
           <Route path="/clients/new" element={<ClientFormPage />} />
           <Route path="/clients/:id" element={<ClientFormPage />} />
@@ -73,15 +75,6 @@ function App() {
           <Route path="/client/help" element={<ClientHelpPage />} />
         </>
       )}
-      
-      {/* Redirect based on authentication status */}
-      <Route path="/" element={
-        user 
-          ? userRole === 'client' 
-            ? <Navigate to="/client" /> 
-            : <Navigate to="/dashboard" />
-          : <Navigate to="/login" />
-      } />
       
       {/* 404 route */}
       <Route path="*" element={<NotFound />} />

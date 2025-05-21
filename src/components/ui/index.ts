@@ -10,3 +10,5 @@ export { Textarea } from "./textarea";
 export { Loading } from "./loading";
 export { Input } from "./input";
 export { Label } from "./label";
+export { Tabs, TabsList, TabsTrigger, TabsContent } from "./tabs";
+export { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./select";
