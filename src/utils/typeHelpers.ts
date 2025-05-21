@@ -1,127 +1,63 @@
-import { Json } from '@/integrations/supabase/types';
-import { 
-  Candidate, 
-  CandidateNote, 
-  Education, 
-  WorkExperience, 
-  Project, 
-  Publication,
-  PipelineStage 
-} from '@/types';
 
-// Helper function to convert database JSON to typed Education array
-export function convertToEducation(jsonData: Json | null): Education[] {
-  if (!jsonData) return [];
-  try {
-    if (typeof jsonData === 'string') {
-      return JSON.parse(jsonData) as Education[];
-    }
-    return jsonData as unknown as Education[];
-  } catch (e) {
-    console.error('Error converting education data:', e);
-    return [];
-  }
-}
+import { Candidate, Client, Job, CandidateNote } from '@/types';
 
-// Helper function to convert database JSON to typed WorkExperience array
-export function convertToWorkExperience(jsonData: Json | null): WorkExperience[] {
-  if (!jsonData) return [];
-  try {
-    if (typeof jsonData === 'string') {
-      return JSON.parse(jsonData) as WorkExperience[];
-    }
-    return jsonData as unknown as WorkExperience[];
-  } catch (e) {
-    console.error('Error converting work experience data:', e);
-    return [];
-  }
-}
-
-// Helper function to convert database JSON to typed Project array
-export function convertToProjects(jsonData: Json | null): Project[] {
-  if (!jsonData) return [];
-  try {
-    if (typeof jsonData === 'string') {
-      return JSON.parse(jsonData) as Project[];
-    }
-    return jsonData as unknown as Project[];
-  } catch (e) {
-    console.error('Error converting projects data:', e);
-    return [];
-  }
-}
-
-// Helper function to convert database JSON to typed Publication array
-export function convertToPublications(jsonData: Json | null): Publication[] {
-  if (!jsonData) return [];
-  try {
-    if (typeof jsonData === 'string') {
-      return JSON.parse(jsonData) as Publication[];
-    }
-    return jsonData as unknown as Publication[];
-  } catch (e) {
-    console.error('Error converting publications data:', e);
-    return [];
-  }
-}
-
-// Helper function to convert database JSON to Record<string, string>
-export function convertToSocialMedia(jsonData: Json | null): Record<string, string> {
-  if (!jsonData) return {};
-  try {
-    if (typeof jsonData === 'string') {
-      return JSON.parse(jsonData) as Record<string, string>;
-    }
-    return jsonData as unknown as Record<string, string>;
-  } catch (e) {
-    console.error('Error converting social media data:', e);
-    return {};
-  }
-}
-
-// Helper function to convert database candidate to typed Candidate
-export function convertToCandidate(data: any): Candidate {
-  return {
-    ...data,
-    education: convertToEducation(data.education),
-    experience: convertToWorkExperience(data.experience),
-    projects: convertToProjects(data.projects),
-    publications: convertToPublications(data.publications),
-    social_media: convertToSocialMedia(data.social_media),
-    pipeline_stage: validatePipelineStage(data.pipeline_stage),
-    status: data.status as Candidate['status']
-  };
-}
-
-// Helper function to convert database candidates to typed Candidate array
+/**
+ * Helper function to properly convert database objects to typed Candidate objects
+ */
 export function convertToCandidates(data: any[]): Candidate[] {
-  return data.map(convertToCandidate);
+  return data.map(item => {
+    // Ensure each complex object is properly typed
+    const candidate: Candidate = {
+      ...item,
+      education: Array.isArray(item.education) ? item.education : [],
+      experience: Array.isArray(item.experience) ? item.experience : [],
+      projects: Array.isArray(item.projects) ? item.projects : [],
+      publications: Array.isArray(item.publications) ? item.publications : [],
+      skills: Array.isArray(item.skills) ? item.skills : [],
+      languages: Array.isArray(item.languages) ? item.languages : [],
+      assigned_to_clients: Array.isArray(item.assigned_to_clients) ? item.assigned_to_clients : [],
+      liked_by_clients: Array.isArray(item.liked_by_clients) ? item.liked_by_clients : []
+    };
+    return candidate;
+  });
 }
 
-// Helper function to convert database notes to typed CandidateNote array
+/**
+ * Helper function to properly convert database objects to typed Client objects
+ */
+export function convertToClients(data: any[]): Client[] {
+  return data.map(item => {
+    const client: Client = {
+      ...item,
+      assigned_candidates: Array.isArray(item.assigned_candidates) ? item.assigned_candidates : [],
+      liked_candidates: Array.isArray(item.liked_candidates) ? item.liked_candidates : []
+    };
+    return client;
+  });
+}
+
+/**
+ * Helper function to properly convert database objects to typed Job objects
+ */
+export function convertToJobs(data: any[]): Job[] {
+  return data.map(item => {
+    const job: Job = {
+      ...item,
+      requirements: Array.isArray(item.requirements) ? item.requirements : [],
+      responsibilities: Array.isArray(item.responsibilities) ? item.responsibilities : []
+    };
+    return job;
+  });
+}
+
+/**
+ * Helper function to properly convert database objects to typed CandidateNote objects
+ */
 export function convertToCandidateNotes(data: any[]): CandidateNote[] {
-  return data.map(note => ({
-    ...note,
-    type: note.type as CandidateNote['type']
-  }));
-}
-
-// Validate a pipeline stage
-export function validatePipelineStage(stage: string): PipelineStage {
-  const validStages: PipelineStage[] = [
-    'new_candidate', 
-    'screening', 
-    'interview',
-    'offer',
-    'hired',
-    'rejected'
-  ];
-  
-  if (validStages.includes(stage as PipelineStage)) {
-    return stage as PipelineStage;
-  }
-  
-  // Default to new_candidate if invalid
-  console.warn(`Invalid pipeline stage: ${stage}, defaulting to new_candidate`);
-  return 'new_candidate';
+  return data.map(item => {
+    const note: CandidateNote = {
+      ...item
+    };
+    return note;
+  });
 }

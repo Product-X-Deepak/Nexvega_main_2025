@@ -1,112 +1,89 @@
-import { supabase } from '@/integrations/supabase/client';
+
+import { supabase } from '@/lib/supabase';
 import { Candidate } from '@/types';
-import { 
-  extractTextFromFile, 
-  processResume as processResumeFile, 
-  processMultipleResumes as processBulkResumes,
-  saveProcessedCandidate as saveCandidate 
-} from '@/lib/resumeProcessing';
-import { Json } from '@/integrations/supabase/types';
-
-// Convert database types to application types
-function convertToAppType(data: any): Candidate {
-  if (!data) return data;
-  
-  // Ensure complex objects are properly typed for the application
-  const candidate: Candidate = {
-    ...data,
-    // Convert JSON objects back to typed arrays if needed
-    education: (data.education || []) as Candidate['education'],
-    experience: (data.experience || []) as Candidate['experience'],
-    projects: (data.projects || []) as Candidate['projects'],
-    publications: (data.publications || []) as Candidate['publications']
-  };
-  
-  return candidate;
-}
-
-// Convert application type to database type
-function convertToDbType(data: Partial<Candidate>): any {
-  if (!data) return data;
-  
-  const dbData = {
-    ...data,
-    education: data.education as unknown as Json,
-    experience: data.experience as unknown as Json,
-    projects: data.projects as unknown as Json,
-    publications: data.publications as unknown as Json,
-    social_media: data.social_media as unknown as Json,
-  };
-  
-  // Validate pipeline stage is a proper enum value
-  if (dbData.pipeline_stage) {
-    // List of valid pipeline stages from the enum type
-    const validStages = ['new_candidate', 'screening', 'interview', 'offer', 'hired', 'rejected'];
-    if (!validStages.includes(dbData.pipeline_stage)) {
-      dbData.pipeline_stage = 'new_candidate';
-    }
-  }
-  
-  // Handle embedding - convert from number[] to string if necessary
-  if (dbData.embedding && Array.isArray(dbData.embedding)) {
-    // Keep the embedding as is, since Supabase's pgvector handles it properly
-    // The type definition might be incorrect
-  }
-  
-  return dbData;
-}
+import { extractTextFromFile } from '@/utils/fileUtils';
 
 // Process and upload a single resume
-export async function uploadResume(file: File, userId: string) {
+export async function uploadResume(file: File, userId: string): Promise<Candidate | null> {
   try {
-    // Extract and process resume
-    const { resumeId, resumeUrl, parsedData, resumeText } = await processResumeFile(file, userId);
+    // Extract the text content from the resume
+    const resumeText = await extractTextFromFile(file);
+    
+    // Upload file to storage
+    const fileExt = file.name.split('.').pop();
+    const filePath = `${userId}/${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`;
+    
+    const { error: uploadError } = await supabase.storage
+      .from('resumes')
+      .upload(filePath, file);
+      
+    if (uploadError) throw uploadError;
+    
+    // Get public URL for the file
+    const { data: urlData } = supabase.storage
+      .from('resumes')
+      .getPublicUrl(filePath);
+    
+    // Parse the resume using the parse-resume edge function
+    const { data: parsedData, error: parseError } = await supabase.functions.invoke('parse-resume', {
+      body: {
+        resumeText,
+        model: "gpt-4o"
+      }
+    });
+    
+    if (parseError) throw parseError;
+    
+    if (!parsedData.success || !parsedData.data) {
+      throw new Error('Failed to parse resume');
+    }
     
     // Prepare candidate data for database
     const candidateData = {
-      ...parsedData,
-      resume_id: resumeId,
-      resume_url: resumeUrl,
+      ...parsedData.data,
+      resume_id: filePath,
+      resume_url: urlData.publicUrl,
       created_by: userId,
       status: 'active',
       pipeline_stage: 'new_candidate',
     };
     
     // Insert the data into the database
-    const { data: dbCandidate, error: candidateError } = await supabase
+    const { data: dbCandidate, error: insertError } = await supabase
       .from('candidates')
-      .insert(convertToDbType({
-        ...candidateData,
-        education: candidateData.education,
-        experience: candidateData.experience,
-        projects: candidateData.projects,
-        publications: candidateData.publications,
-        social_media: candidateData.social_media,
-      }))
+      .insert(candidateData)
       .select()
       .single();
       
-    if (candidateError) throw candidateError;
+    if (insertError) throw insertError;
     
-    const candidate = convertToAppType(dbCandidate);
-    
-    // Generate embedding for search functionality
-    if (resumeText && resumeText.length > 10 && candidate?.id) {
+    // Generate embedding for semantic search
+    if (resumeText && dbCandidate?.id) {
       const embedText = `
-        ${parsedData.resume_summary || ''} 
-        ${parsedData.skills ? parsedData.skills.join(' ') : ''}
+        ${parsedData.data.full_name || ''} 
+        ${parsedData.data.resume_summary || ''} 
+        ${parsedData.data.skills ? parsedData.data.skills.join(' ') : ''}
+        ${parsedData.data.experience ? parsedData.data.experience.map((exp: any) => 
+          `${exp.title || ''} ${exp.company || ''} ${exp.responsibilities?.join(' ') || ''}`
+        ).join(' ') : ''}
       `;
       
-      await supabase.functions.invoke('generate-embeddings', {
-        body: {
-          recordId: candidate.id,
-          recordType: 'candidate',
-          text: embedText
-        }
-      });
+      try {
+        await supabase.functions.invoke('generate-embeddings', {
+          body: {
+            recordId: dbCandidate.id,
+            recordType: 'candidate',
+            text: embedText
+          }
+        });
+      } catch (embeddingError) {
+        console.error('Error generating embedding:', embeddingError);
+        // Continue even if embedding generation fails
+      }
     }
     
-    return candidate;
+    return dbCandidate as Candidate;
+    
   } catch (error) {
     console.error('Error uploading resume:', error);
     throw error;
@@ -114,43 +91,45 @@ export async function uploadResume(file: File, userId: string) {
 }
 
 // Process multiple resumes at once
-export async function processMultipleResumes(files: File[], userId?: string): Promise<{ processed: any[], failed: any[] }> {
+export async function processMultipleResumes(files: File[], userId: string): Promise<{ processed: any[], failed: any[] }> {
+  const processed: any[] = [];
+  const failed: any[] = [];
+  
+  // Initialize batch processing
   try {
-    return await processBulkResumes(files, userId || 'anonymous');
-  } catch (error) {
-    console.error('Error processing multiple resumes:', error);
-    throw error;
-  }
-}
-
-// Save a processed candidate to the database
-export async function saveProcessedCandidate(candidateData: any) {
-  try {
-    const userId = candidateData.created_by || 'anonymous';
-    return await saveCandidate(candidateData, userId);
-  } catch (error) {
-    console.error('Error saving processed candidate:', error);
-    throw error;
-  }
-}
-
-// Search for candidates based on a job description
-export async function searchCandidates(jobDescription: string, limit = 50) {
-  try {
-    const { data, error } = await supabase.functions.invoke('match-candidates', {
-      body: { jobDescription, limit }
+    await supabase.functions.invoke('parse-resume-batch', {
+      body: {
+        fileCount: files.length,
+        userId
+      }
     });
-    
-    if (error) throw error;
-    return data;
   } catch (error) {
-    console.error('Error searching candidates:', error);
-    throw error;
+    console.error('Error initializing batch processing:', error);
+    // Continue anyway, as we'll process files individually
   }
+  
+  // Process each file individually
+  for (const file of files) {
+    try {
+      const candidate = await uploadResume(file, userId);
+      processed.push({
+        filename: file.name,
+        candidate
+      });
+    } catch (error) {
+      console.error(`Error processing file ${file.name}:`, error);
+      failed.push({
+        filename: file.name,
+        error: error.message
+      });
+    }
+  }
+  
+  return { processed, failed };
 }
 
 // Get candidate by ID
-export async function getCandidateById(id: string): Promise<Candidate> {
+export async function getCandidateById(id: string): Promise<Candidate | null> {
   try {
     const { data, error } = await supabase
       .from('candidates')
@@ -159,48 +138,125 @@ export async function getCandidateById(id: string): Promise<Candidate> {
       .single();
       
     if (error) throw error;
-    return convertToAppType(data);
+    
+    return data as Candidate;
   } catch (error) {
     console.error('Error fetching candidate:', error);
-    throw error;
+    return null;
   }
 }
 
-// Update candidate
-export async function updateCandidate(id: string, updates: Partial<Candidate>) {
+// Update candidate information
+export async function updateCandidate(id: string, updates: Partial<Candidate>): Promise<Candidate | null> {
   try {
-    // Transform complex objects for database storage
-    const dbUpdates = convertToDbType({
-      ...updates,
-      updated_at: new Date().toISOString()
-    });
-
     const { data, error } = await supabase
       .from('candidates')
-      .update(dbUpdates)
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString()
+      })
       .eq('id', id)
-      .select();
+      .select()
+      .single();
       
     if (error) throw error;
-    return convertToAppType(data[0]);
+    
+    return data as Candidate;
   } catch (error) {
     console.error('Error updating candidate:', error);
-    throw error;
+    return null;
   }
 }
 
-// Delete candidate
-export async function deleteCandidate(id: string) {
+// Search for candidates based on a job description
+export async function searchCandidatesByJobDescription(jobDescription: string, limit = 50): Promise<Candidate[]> {
+  try {
+    const { data, error } = await supabase.functions.invoke('match-candidates', {
+      body: { jobDescription, limit }
+    });
+    
+    if (error) throw error;
+    
+    return data as Candidate[];
+  } catch (error) {
+    console.error('Error searching candidates:', error);
+    return [];
+  }
+}
+
+// Assign candidates to a client
+export async function assignCandidatesToClient(candidateIds: string[], clientId: string): Promise<boolean> {
+  try {
+    // Get current client info
+    const { data: clientData, error: clientError } = await supabase
+      .from('clients')
+      .select('assigned_candidates')
+      .eq('id', clientId)
+      .single();
+      
+    if (clientError) throw clientError;
+    
+    // Combine existing and new assigned candidates
+    const existingAssigned = clientData.assigned_candidates || [];
+    const newAssigned = [...new Set([...existingAssigned, ...candidateIds])];
+    
+    // Update client with new assigned candidates
+    const { error: updateError } = await supabase
+      .from('clients')
+      .update({ 
+        assigned_candidates: newAssigned,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', clientId);
+      
+    if (updateError) throw updateError;
+    
+    return true;
+  } catch (error) {
+    console.error('Error assigning candidates to client:', error);
+    return false;
+  }
+}
+
+// Update candidate pipeline stage
+export async function updateCandidatePipelineStage(candidateId: string, stage: string): Promise<boolean> {
   try {
     const { error } = await supabase
       .from('candidates')
-      .delete()
-      .eq('id', id);
+      .update({ 
+        pipeline_stage: stage,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', candidateId);
       
     if (error) throw error;
+    
     return true;
   } catch (error) {
-    console.error('Error deleting candidate:', error);
-    throw error;
+    console.error('Error updating pipeline stage:', error);
+    return false;
+  }
+}
+
+// Batch update candidate pipeline stages
+export async function batchUpdatePipelineStage(candidateIds: string[], stage: string): Promise<boolean> {
+  try {
+    // Update each candidate one by one (Supabase doesn't support bulk updates cleanly)
+    for (const id of candidateIds) {
+      const { error } = await supabase
+        .from('candidates')
+        .update({ 
+          pipeline_stage: stage,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id);
+        
+      if (error) throw error;
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error batch updating pipeline stages:', error);
+    return false;
   }
 }

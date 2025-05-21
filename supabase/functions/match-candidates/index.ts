@@ -38,14 +38,15 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: false,
-          error: "Missing required parameter: jobDescription is required" 
+          error: "Job description is required for candidate matching" 
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
+
+    console.log(`Processing job description for candidate matching: ${jobDescription.substring(0, 50)}...`);
     
     // Generate embedding for job description
-    console.log("Generating embedding for job description");
     const embeddingResponse = await fetch("https://api.openai.com/v1/embeddings", {
       method: "POST",
       headers: {
@@ -54,83 +55,108 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         model: "text-embedding-3-small",
-        input: jobDescription.substring(0, 8000)  // Limit to 8000 chars
+        input: jobDescription.substring(0, 8000) // Limit to 8000 chars
       })
     });
     
     if (!embeddingResponse.ok) {
       const errorData = await embeddingResponse.json();
-      console.error("OpenAI API error:", errorData);
       throw new Error(`OpenAI API error: ${errorData.error?.message || "Unknown error"}`);
     }
     
     const embeddingData = await embeddingResponse.json();
-    const jobEmbedding = embeddingData.data[0].embedding;
+    const embedding = embeddingData.data[0].embedding;
     
-    // Store job embedding if jobId is provided
+    // Store the job if jobId is provided
     if (jobId) {
+      // Update job with embedding
       const { error: updateError } = await supabase
-        .from("jobs")
-        .update({ embedding: jobEmbedding })
+        .from('jobs')
+        .update({ embedding })
         .eq('id', jobId);
         
       if (updateError) {
         console.error(`Error updating job with embedding: ${updateError.message}`);
-      } else {
-        console.log(`Successfully updated job ${jobId} with embedding`);
+        // Continue with search anyway
       }
     }
     
-    // Search for similar candidate vectors
-    const { data: matchedCandidates, error: searchError } = await supabase.rpc(
-      'match_candidates_by_vector',
+    // Search for candidates using vector similarity
+    console.log("Searching for candidates with vector similarity...");
+    
+    // This SQL query uses the cosine_distance function to find similar candidates
+    const { data: candidates, error: searchError } = await supabase.rpc(
+      'match_candidates_by_embedding',
       {
-        query_embedding: jobEmbedding,
-        match_threshold: 0.5,
+        query_embedding: embedding,
+        match_threshold: 0.5, // Adjust threshold as needed (0.0-1.0)
         match_count: limit
       }
     );
     
     if (searchError) {
-      throw new Error(`Error searching candidates: ${searchError.message}`);
+      // If the RPC function doesn't exist, fall back to regular search
+      console.error("Error with vector search:", searchError);
+      
+      // Fallback to regular search
+      console.log("Falling back to regular search...");
+      const { data: fallbackCandidates, error: fallbackError } = await supabase
+        .from('candidates')
+        .select('*')
+        .eq('status', 'active')
+        .limit(limit);
+        
+      if (fallbackError) throw fallbackError;
+      
+      // Save search results
+      if (jobId) {
+        try {
+          await supabase.from('search_results').insert({
+            job_id: jobId,
+            candidate_ids: fallbackCandidates.map(c => c.id),
+            scores: fallbackCandidates.map(() => 0), // No scores in fallback
+            created_by: null
+          });
+        } catch (saveError) {
+          console.error("Error saving search results:", saveError);
+          // Continue anyway
+        }
+      }
+      
+      return new Response(
+        JSON.stringify({ 
+          success: true,
+          data: fallbackCandidates,
+          message: "Found using fallback search (no vector matching)"
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+      );
     }
     
-    // Store search results if jobId is provided
-    if (jobId && matchedCandidates?.length > 0) {
-      const candidateIds = matchedCandidates.map(c => c.id);
-      const scores = matchedCandidates.map(c => c.similarity);
-      
-      const { error: resultError } = await supabase
-        .from("search_results")
-        .insert({
+    // Extract and format candidate data
+    console.log(`Found ${candidates.length} matching candidates`);
+    
+    // Save search results if jobId is provided
+    if (jobId && candidates.length > 0) {
+      try {
+        await supabase.from('search_results').insert({
           job_id: jobId,
-          candidate_ids: candidateIds,
-          scores: scores,
-          created_at: new Date().toISOString(),
-          created_by: req.headers.get("x-supabase-auth-user-id") || null
+          candidate_ids: candidates.map(c => c.id),
+          scores: candidates.map(c => c.similarity),
+          created_by: null
         });
-        
-      if (resultError) {
-        console.error(`Error storing search results: ${resultError.message}`);
-      } else {
-        console.log(`Successfully stored search results for job ${jobId}`);
+      } catch (saveError) {
+        console.error("Error saving search results:", saveError);
+        // Continue anyway
       }
     }
     
-    // Process candidates to add additional computed fields
-    const processedCandidates = matchedCandidates?.map(candidate => ({
-      ...candidate,
-      match_score: Math.round(candidate.similarity * 100),
-      // Calculate experience years (if the data structure allows)
-      experience_years: calculateExperienceYears(candidate.experience),
-      // Extract most relevant skills based on the job description
-      relevant_skills: extractRelevantSkills(candidate.skills, jobDescription)
-    })) || [];
-    
+    // Return matched candidates
     return new Response(
       JSON.stringify({ 
         success: true,
-        data: processedCandidates || []
+        data: candidates,
+        message: `Found ${candidates.length} matching candidates using vector similarity`
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );
@@ -140,66 +166,9 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: false,
-        error: error.message
+        error: error.message || "An unknown error occurred"
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }
 });
-
-// Calculate total years of experience from experience array
-function calculateExperienceYears(experienceArray: any[] | null): number {
-  if (!experienceArray || !Array.isArray(experienceArray) || experienceArray.length === 0) {
-    return 0;
-  }
-  
-  let totalMonths = 0;
-  
-  experienceArray.forEach(exp => {
-    // Skip if missing dates
-    if (!exp.start_date) return;
-    
-    const startDate = new Date(exp.start_date);
-    let endDate = new Date();
-    
-    if (exp.end_date && !exp.current) {
-      endDate = new Date(exp.end_date);
-    }
-    
-    // Calculate months between dates
-    const months = (endDate.getFullYear() - startDate.getFullYear()) * 12 + 
-                  (endDate.getMonth() - startDate.getMonth());
-    
-    // Add to total
-    totalMonths += Math.max(0, months);
-  });
-  
-  // Convert months to years (rounded to 1 decimal)
-  return Math.round(totalMonths / 12 * 10) / 10;
-}
-
-// Extract skills that are most likely relevant to the job description
-function extractRelevantSkills(skills: string[] | null, jobDescription: string): string[] {
-  if (!skills || !Array.isArray(skills) || skills.length === 0) {
-    return [];
-  }
-  
-  // Convert job description to lowercase for comparison
-  const lowercaseJD = jobDescription.toLowerCase();
-  
-  // Score each skill based on if it appears in the job description
-  const scoredSkills = skills.map(skill => {
-    const lowercaseSkill = skill.toLowerCase();
-    const appears = lowercaseJD.includes(lowercaseSkill);
-    return {
-      skill,
-      score: appears ? 1 : 0
-    };
-  });
-  
-  // Sort by score and return top skills
-  return scoredSkills
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 10)
-    .map(item => item.skill);
-}

@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { Candidate, PipelineStage, CandidateStatus } from '@/types';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { convertToCandidates } from '@/utils/typeHelpers';
 
@@ -13,6 +13,7 @@ interface CandidateFilters {
   minExperience?: number;
   maxExperience?: number;
   location?: string;
+  education?: string;
 }
 
 export function useCandidates() {
@@ -21,34 +22,44 @@ export function useCandidates() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('all');
   const [showFilters, setShowFilters] = useState(false);
-  const [filters, setFilters] = useState<CandidateFilters>({
-    skills: []
-  });
+  const [filters, setFilters] = useState<CandidateFilters>({});
   const [searchMode, setSearchMode] = useState<'basic' | 'semantic' | 'boolean'>('basic');
   const { toast } = useToast();
-  const { user, userRole } = useAuth();
-  
-  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchQuery(e.target.value);
-  };
-  
-  const handleTabChange = (value: string) => {
-    setActiveTab(value);
-  };
-  
-  const toggleFilters = () => {
-    setShowFilters(!showFilters);
-  };
-  
-  const handleFilterChange = (key: string, value: any) => {
-    setFilters(prev => ({ ...prev, [key]: value }));
-  };
-  
+  const { user } = useAuth();
+
+  // Fetch candidates function
   const fetchCandidates = useCallback(async () => {
     setLoading(true);
-    
     try {
-      let query = supabase.from('candidates').select('*');
+      let query = supabase
+        .from('candidates')
+        .select('*')
+        .order('updated_at', { ascending: false });
+      
+      // Apply search if provided
+      if (searchQuery) {
+        if (searchMode === 'basic') {
+          // Basic text search (fallback)
+          query = query.or(`full_name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%,skills.cs.{${searchQuery}}`);
+        } else if (searchMode === 'boolean') {
+          // For boolean search, we'd ideally process the query string into a structured query
+          // This is a simplified version for demo
+          const terms = searchQuery.split(' AND ');
+          terms.forEach(term => {
+            if (term.includes('NOT ')) {
+              const notTerm = term.replace('NOT ', '');
+              query = query.not('full_name', 'ilike', `%${notTerm}%`);
+            } else if (term.includes(' OR ')) {
+              const orTerms = term.split(' OR ');
+              const orConditions = orTerms.map(t => `full_name.ilike.%${t}%`).join(',');
+              query = query.or(orConditions);
+            } else {
+              query = query.ilike('full_name', `%${term}%`);
+            }
+          });
+        }
+        // For semantic search, we'll handle it separately with embeddings
+      }
       
       // Apply filters based on active tab
       if (activeTab === 'active') {
@@ -68,172 +79,160 @@ export function useCandidates() {
         query = query.eq('pipeline_stage', filters.pipelineStage);
       }
       
+      if (filters.skills && filters.skills.length > 0) {
+        // Use overlap operator to find candidates with any of these skills
+        query = query.contains('skills', filters.skills);
+      }
+      
       if (filters.location) {
-        query = query.ilike('location', `%${filters.location}%`);
+        // Search for location in experience array
+        query = query.textSearch('experience', filters.location);
       }
       
-      // Handle search query based on search mode
-      if (searchQuery) {
-        if (searchMode === 'basic') {
-          // Basic search using ILIKE on multiple fields
-          query = query.or(`full_name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`);
-        } else if (searchMode === 'boolean') {
-          // For boolean search, we would implement a more sophisticated search parser
-          // This is simplified for now
-          query = query.or(`full_name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`);
-        }
-        // For semantic search, we would use the vector similarity search in a separate function
-      }
-      
-      // Execute the query
       const { data, error } = await query;
       
-      if (error) throw error;
-      
-      // Convert database results to Candidate type
-      const typedCandidates = convertToCandidates(data);
-      
-      // Apply client-side filtering for skills
-      let filteredCandidates = typedCandidates;
-      
-      if (filters.skills && filters.skills.length > 0) {
-        filteredCandidates = filteredCandidates.filter(candidate => {
-          const candidateSkills = candidate.skills || [];
-          return filters.skills!.some(skill => 
-            candidateSkills.some(candidateSkill => 
-              candidateSkill.toLowerCase().includes(skill.toLowerCase())
-            )
-          );
-        });
+      if (error) {
+        throw error;
       }
       
-      setCandidates(filteredCandidates);
+      if (data) {
+        const typedCandidates = convertToCandidates(data);
+        setCandidates(typedCandidates);
+      }
     } catch (error) {
-      console.error("Error fetching candidates:", error);
+      console.error('Error fetching candidates:', error);
       toast({
-        title: "Error",
-        description: "Failed to load candidates. Please try again.",
-        variant: "destructive"
+        title: 'Error fetching candidates',
+        description: error.message || 'Failed to load candidates',
+        variant: 'destructive',
       });
     } finally {
       setLoading(false);
     }
-  }, [activeTab, filters, searchQuery, searchMode, toast]);
-  
-  // Perform semantic search
-  const performSemanticSearch = async () => {
-    if (!searchQuery.trim() || searchMode !== 'semantic') return;
-    
-    setLoading(true);
-    
+  }, [searchQuery, activeTab, filters, searchMode, toast]);
+
+  // Semantic search using embeddings
+  const performSemanticSearch = async (query: string) => {
     try {
+      setLoading(true);
+      
+      // Call the match-candidates function with the search query
       const { data, error } = await supabase.functions.invoke('match-candidates', {
         body: { 
-          jobDescription: searchQuery,
+          jobDescription: query,
           limit: 50
         }
       });
       
       if (error) throw error;
       
-      setCandidates(data);
-      
-      toast({
-        title: "Semantic Search Complete",
-        description: `Found ${data.length} matching candidates based on your description.`,
-      });
+      if (data) {
+        setCandidates(convertToCandidates(data));
+      }
     } catch (error) {
-      console.error("Error performing semantic search:", error);
+      console.error('Error performing semantic search:', error);
       toast({
-        title: "Search Error",
-        description: "Failed to perform semantic search. Please try again.",
-        variant: "destructive"
+        title: 'Search failed',
+        description: error.message || 'Failed to perform semantic search',
+        variant: 'destructive',
       });
     } finally {
       setLoading(false);
     }
   };
-  
-  // Fetch candidates when dependencies change
+
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(e.target.value);
+  };
+
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+  };
+
+  const toggleFilters = () => {
+    setShowFilters(!showFilters);
+  };
+
+  const handleFilterChange = (newFilters: Partial<CandidateFilters>) => {
+    setFilters({ ...filters, ...newFilters });
+  };
+
+  const updatePipelineStage = async (candidateIds: string[], stage: PipelineStage) => {
+    try {
+      // Call edge function to update pipeline stage
+      const { error } = await supabase.functions.invoke('ai-assistant', {
+        body: {
+          action: 'update_pipeline_stage',
+          actionParams: {
+            candidateIds,
+            stage
+          },
+          userId: user?.id
+        }
+      });
+      
+      if (error) throw error;
+      
+      toast({
+        title: 'Success',
+        description: `Updated ${candidateIds.length} candidates to ${stage} stage`,
+      });
+      
+      // Refresh candidate list
+      fetchCandidates();
+    } catch (error) {
+      console.error('Error updating pipeline stage:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to update pipeline stage',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const assignToClient = async (candidateIds: string[], clientId: string) => {
+    try {
+      // Call edge function to assign candidates to client
+      const { error } = await supabase.functions.invoke('ai-assistant', {
+        body: {
+          action: 'assign_candidates',
+          actionParams: {
+            candidateIds,
+            clientId
+          },
+          userId: user?.id
+        }
+      });
+      
+      if (error) throw error;
+      
+      toast({
+        title: 'Success',
+        description: `Assigned ${candidateIds.length} candidates to client`,
+      });
+      
+      // Refresh candidate list
+      fetchCandidates();
+    } catch (error) {
+      console.error('Error assigning candidates:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to assign candidates to client',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // Effect hook to fetch candidates
   useEffect(() => {
-    if (searchMode === 'semantic' && searchQuery.trim()) {
-      performSemanticSearch();
+    if (searchMode === 'semantic' && searchQuery.length > 0) {
+      // Use semantic search when that mode is selected and there's a query
+      performSemanticSearch(searchQuery);
     } else {
       fetchCandidates();
     }
   }, [fetchCandidates, searchMode, searchQuery]);
-  
-  // Update pipeline stage for one or more candidates
-  const updatePipelineStage = async (candidateIds: string[], stage: PipelineStage) => {
-    try {
-      for (const id of candidateIds) {
-        const { error } = await supabase
-          .from('candidates')
-          .update({ 
-            pipeline_stage: stage,
-            updated_at: new Date().toISOString(),
-            modified_by: user?.id
-          })
-          .eq('id', id);
-          
-        if (error) throw error;
-      }
-      
-      toast({
-        title: "Pipeline Updated",
-        description: `Successfully moved ${candidateIds.length} candidate(s) to ${stage.replace('_', ' ')} stage.`,
-      });
-      
-      // Refresh candidates
-      fetchCandidates();
-    } catch (error) {
-      console.error("Error updating pipeline stage:", error);
-      toast({
-        title: "Update Failed",
-        description: "Failed to update candidate pipeline stage. Please try again.",
-        variant: "destructive"
-      });
-    }
-  };
-  
-  // Assign candidates to a client
-  const assignToClient = async (candidateIds: string[], clientId: string) => {
-    try {
-      // Get the client's existing assigned candidates
-      const { data: clientData, error: clientError } = await supabase
-        .from('clients')
-        .select('assigned_candidates')
-        .eq('id', clientId)
-        .single();
-        
-      if (clientError) throw clientError;
-      
-      // Merge with new candidate IDs (avoid duplicates)
-      const existingAssignments = clientData.assigned_candidates || [];
-      const updatedAssignments = [...new Set([...existingAssignments, ...candidateIds])];
-      
-      // Update client
-      const { error: updateError } = await supabase
-        .from('clients')
-        .update({ assigned_candidates: updatedAssignments })
-        .eq('id', clientId);
-        
-      if (updateError) throw updateError;
-      
-      toast({
-        title: "Candidates Assigned",
-        description: `Successfully assigned ${candidateIds.length} candidate(s) to client.`,
-      });
-    } catch (error) {
-      console.error("Error assigning candidates:", error);
-      toast({
-        title: "Assignment Failed",
-        description: "Failed to assign candidates to client. Please try again.",
-        variant: "destructive"
-      });
-    }
-  };
-  
+
   return {
     loading,
     candidates,
@@ -249,7 +248,6 @@ export function useCandidates() {
     handleFilterChange,
     setSearchMode,
     updatePipelineStage,
-    assignToClient,
-    performSemanticSearch
+    assignToClient
   };
 }

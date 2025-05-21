@@ -1,8 +1,14 @@
 
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.4.0";
 
 const openAIApiKey = Deno.env.get("OPENAI_API_KEY");
+const supabaseUrl = Deno.env.get("SUPABASE_URL");
+const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+// Initialize Supabase client with service role key
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -28,7 +34,51 @@ serve(async (req) => {
     }
     
     // Get request body
-    const { resumeText, model = "gpt-4o" } = await req.json();
+    const requestData = await req.json();
+    let resumeText = requestData.resumeText || '';
+    const model = requestData.model || "gpt-4o";
+    
+    // Check if we're getting a resume URL instead of text
+    if (requestData.resumeUrl) {
+      try {
+        // Fetch the text from the URL
+        const fileResponse = await fetch(requestData.resumeUrl);
+        const fileType = requestData.fileType || fileResponse.headers.get('content-type');
+        
+        // Handle different file types
+        if (fileType === 'application/pdf') {
+          // For PDF, we can't easily extract text here, so return an error
+          return new Response(
+            JSON.stringify({ 
+              success: false,
+              error: "PDF processing in edge functions is not supported. Please extract the text client-side first." 
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+          );
+        } else if (fileType === 'text/plain') {
+          // For text files, we can read the content directly
+          resumeText = await fileResponse.text();
+        } else {
+          // For other file types, return an error
+          return new Response(
+            JSON.stringify({ 
+              success: false,
+              error: `File type ${fileType} processing in edge functions is not supported. Please extract the text client-side first.` 
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+          );
+        }
+      } catch (error) {
+        console.error('Error fetching resume from URL:', error);
+        return new Response(
+          JSON.stringify({ 
+            success: false,
+            error: `Error fetching resume from URL: ${error.message}` 
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+        );
+      }
+    }
     
     if (!resumeText || resumeText.trim().length < 10) {
       return new Response(
