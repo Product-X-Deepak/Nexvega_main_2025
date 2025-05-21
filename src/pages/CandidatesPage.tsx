@@ -31,6 +31,7 @@ import { Candidate, PipelineStage } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import CandidateCard from '@/components/candidates/CandidateCard';
 import CandidateFilters from '@/components/candidates/CandidateFilters';
+import { convertToCandidates } from '@/utils/typeHelpers';
 
 export default function CandidatesPage() {
   const [loading, setLoading] = useState(true);
