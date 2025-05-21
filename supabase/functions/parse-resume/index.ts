@@ -44,6 +44,8 @@ serve(async (req) => {
     const supportedModels = ['gpt-3.5-turbo', 'gpt-4o'];
     const selectedModel = supportedModels.includes(model) ? model : 'gpt-4o';
     
+    console.log(`Processing resume with model: ${selectedModel}`);
+    
     // Set up system prompt for resume parsing
     const systemPrompt = `
       You are an expert ATS (Applicant Tracking System) resume parser.

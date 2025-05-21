@@ -4,7 +4,7 @@ import ChatAssistant from '@/components/ChatAssistant';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Cpu } from 'lucide-react';
+import { Zap, BrainCircuit } from 'lucide-react';
 
 export default function ChatAssistantPage() {
   const { isAdmin } = useAuth();
@@ -40,21 +40,21 @@ export default function ChatAssistantPage() {
                   <TabsContent value="models" className="space-y-4 pt-3">
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
-                        <Cpu className="h-5 w-5 text-blue-500" />
+                        <Zap className="h-5 w-5 text-blue-500" />
                         <h3 className="font-medium">GPT-3.5 Turbo</h3>
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        Faster responses, ideal for simpler queries and day-to-day tasks.
+                        Faster responses, ideal for simpler queries and day-to-day tasks. Uses fewer tokens and is more cost-effective.
                       </p>
                     </div>
                     
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
-                        <Cpu className="h-5 w-5 text-purple-500" />
+                        <BrainCircuit className="h-5 w-5 text-purple-500" />
                         <h3 className="font-medium">GPT-4o</h3>
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        More advanced capabilities, better at complex tasks, reasoning, and detailed responses.
+                        More advanced capabilities, better at complex tasks, reasoning, and detailed responses. Best for complex resume parsing and matching.
                       </p>
                     </div>
                   </TabsContent>
@@ -72,6 +72,7 @@ export default function ChatAssistantPage() {
                             <li>User and permission management</li>
                             <li>System settings and configurations</li>
                             <li>Analytics and reports</li>
+                            <li>Bulk upload and management operations</li>
                           </ul>
                         </>
                       ) : (
@@ -105,9 +106,10 @@ export default function ChatAssistantPage() {
               <CardContent>
                 <ul className="text-sm space-y-3 list-disc pl-5 text-muted-foreground">
                   <li>Be specific with your questions to get better answers</li>
-                  <li>Use GPT-3.5 for faster responses on simple queries</li>
+                  <li>Use GPT-3.5 Turbo for faster responses on simple queries</li>
                   <li>Switch to GPT-4o for complex tasks requiring more reasoning</li>
                   <li>The assistant can help with candidate matching, resume analysis, and job descriptions</li>
+                  <li>For bulk operations, clearly specify the number of items you want to process</li>
                   <li>Ask for help on using any feature of the ATS system</li>
                 </ul>
               </CardContent>

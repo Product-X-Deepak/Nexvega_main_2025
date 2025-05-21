@@ -48,6 +48,9 @@ serve(async (req) => {
     const supportedModels = ['gpt-3.5-turbo', 'gpt-4o'];
     const selectedModel = supportedModels.includes(model) ? model : 'gpt-3.5-turbo';
     
+    // Log the model being used
+    console.log(`Using model: ${selectedModel} for user with role: ${userRole}`);
+    
     // Determine system prompt based on user role
     const systemPrompt = userRole === 'admin' 
       ? `You are an AI assistant for administrators of an Applicant Tracking System (ATS). 

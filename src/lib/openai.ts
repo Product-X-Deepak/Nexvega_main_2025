@@ -55,17 +55,22 @@ export async function parseResume(resumeText: string, modelType: ModelType = Mod
     Leave fields empty or null if the information is not available in the resume.
   `;
 
-  const response = await openai.chat.completions.create({
-    model: modelType,
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: resumeText }
-    ],
-    response_format: { type: 'json_object' }
-  });
+  try {
+    const response = await openai.chat.completions.create({
+      model: modelType,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: resumeText }
+      ],
+      response_format: { type: 'json_object' }
+    });
 
-  const content = response.choices[0].message.content;
-  return content ? JSON.parse(content) : null;
+    const content = response.choices[0].message.content;
+    return content ? JSON.parse(content) : null;
+  } catch (error) {
+    console.error('Error in parseResume:', error);
+    throw new Error(`Failed to parse resume: ${error.message || 'Unknown error'}`);
+  }
 }
 
 // Match job description with candidate profiles
@@ -92,17 +97,22 @@ export async function matchJobWithCandidates(jobDescription: string, candidatePr
     ${JSON.stringify(candidateProfiles, null, 2)}
   `;
 
-  const response = await openai.chat.completions.create({
-    model: modelType,
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userContent }
-    ],
-    response_format: { type: 'json_object' }
-  });
+  try {
+    const response = await openai.chat.completions.create({
+      model: modelType,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userContent }
+      ],
+      response_format: { type: 'json_object' }
+    });
 
-  const content = response.choices[0].message.content;
-  return content ? JSON.parse(content) : null;
+    const content = response.choices[0].message.content;
+    return content ? JSON.parse(content) : null;
+  } catch (error) {
+    console.error('Error in matchJobWithCandidates:', error);
+    throw new Error(`Failed to match job with candidates: ${error.message || 'Unknown error'}`);
+  }
 }
 
 // Process resume with selected model
