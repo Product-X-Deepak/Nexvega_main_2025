@@ -1,312 +1,161 @@
-import { useState, useRef, useEffect } from 'react';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
-import { 
-  PaperclipIcon, 
-  SendIcon, 
-  RotateCwIcon, 
-  Cpu, 
-  Zap, 
-  BrainCircuit
-} from 'lucide-react';
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from '@/components/ui/select';
 
-interface Message {
+import React, { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { BrainCircuit, Zap } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+
+interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
-  timestamp: Date;
+}
+
+interface ChatAssistantProps {
   model?: string;
 }
 
-const ChatAssistant = () => {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState('');
+export default function ChatAssistant({ model = 'gpt-3.5-turbo' }: ChatAssistantProps) {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [model, setModel] = useState<'gpt-3.5-turbo' | 'gpt-4o'>('gpt-3.5-turbo');
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const { toast } = useToast();
-  const { user, userRole, isAdmin } = useAuth();
-  
-  // Add initial welcome message when component mounts
-  useEffect(() => {
-    const welcomeMessage = {
-      role: 'assistant' as const,
-      content: isAdmin() 
-        ? "Hello, I'm your AI Assistant with full system access. How can I help you today? You can ask me about managing candidates, clients, jobs, or any administrative tasks."
-        : "Hello, I'm your AI Assistant with role-appropriate access. How can I help you today? You can ask me about candidate management, resume processing, or job-related tasks.",
-      timestamp: new Date(),
-      model: 'system'
-    };
-    setMessages([welcomeMessage]);
-  }, [isAdmin]);
-  
-  // Auto scroll to bottom when messages update
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-  
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  const { isAdmin } = useAuth();
 
-  const handleSubmit = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!input.trim()) return;
-    if (!user) {
-      toast({
-        title: "Authentication required",
-        description: "You must be logged in to use the assistant",
-        variant: "destructive",
-      });
-      return;
-    }
+  const handleSendMessage = async () => {
+    if (!inputValue.trim()) return;
     
-    // Add user message to chat
-    const userMessage = { role: 'user' as const, content: input, timestamp: new Date() };
-    setMessages(prev => [...prev, userMessage]);
-    setInput('');
+    const newMessage: ChatMessage = { role: 'user', content: inputValue };
+    setMessages([...messages, newMessage]);
+    setInputValue('');
     setIsLoading(true);
     
     try {
-      // Prepare message history for the AI
-      const messageHistory = messages
-        .filter(msg => msg.model !== 'system') // Filter out system messages
-        .map(msg => ({
-          role: msg.role,
-          content: msg.content
-        }));
-      
-      console.log(`Sending request to AI assistant with model: ${model}`);
-      
-      // Call the AI assistant edge function
-      const { data, error } = await supabase.functions.invoke('ai-assistant', {
-        body: {
-          message: input,
-          userRole: userRole,
-          userId: user.id,
-          messageHistory,
-          model: model
-        }
-      });
-      
-      if (error) throw error;
-      
-      if (data?.success) {
-        // Add AI response to chat
-        const assistantMessage = {
-          role: 'assistant' as const,
-          content: data.response,
-          timestamp: new Date(),
-          model: data.model
-        };
-        setMessages(prev => [...prev, assistantMessage]);
-        
-        // Display model info
-        toast({
-          title: `Response from ${data.model}`,
-          description: "Response generated successfully",
-          duration: 3000,
-        });
-      } else {
-        throw new Error(data?.error || 'Unknown error');
-      }
+      // This would be replaced with actual API call to your AI backend
+      setTimeout(() => {
+        const response = `This is a placeholder response for the ${isAdmin() ? 'admin' : 'staff'} assistant using ${model}. In a real implementation, this would connect to your Supabase Edge Function.`;
+        setMessages(prev => [...prev, { role: 'assistant', content: response }]);
+        setIsLoading(false);
+      }, 1000);
     } catch (error) {
-      console.error('Error getting AI response:', error);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to get a response from the assistant",
-        variant: "destructive",
-      });
-      
-      // Add error message to chat
-      const errorMessage = {
-        role: 'assistant' as const,
-        content: "I'm sorry, I encountered an error while processing your request. Please try again or contact support if the issue persists.",
-        timestamp: new Date(),
-        model: 'system'
-      };
-      setMessages(prev => [...prev, errorMessage]);
-    } finally {
+      console.error('Error fetching response:', error);
       setIsLoading(false);
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmit();
-    }
-  };
-
-  const clearChat = () => {
-    // Keep only the initial welcome message
-    const welcomeMessage = {
-      role: 'assistant' as const,
-      content: isAdmin() 
-        ? "Hello, I'm your AI Assistant with full system access. How can I help you today? You can ask me about managing candidates, clients, jobs, or any administrative tasks."
-        : "Hello, I'm your AI Assistant with role-appropriate access. How can I help you today? You can ask me about candidate management, resume processing, or job-related tasks.",
-      timestamp: new Date(),
-      model: 'system'
-    };
-    setMessages([welcomeMessage]);
-    toast({
-      title: "Chat cleared",
-      description: "Your conversation has been reset",
-    });
-  };
-
-  const formatDate = (date: Date) => {
-    return new Intl.DateTimeFormat('en-US', {
-      hour: '2-digit',
-      minute: '2-digit'
-    }).format(date);
-  };
-
-  // Get icon based on model
-  const getModelIcon = (modelName?: string) => {
-    if (!modelName || modelName === 'system') return null;
-    
-    switch(modelName) {
-      case 'gpt-3.5-turbo':
-        return <Zap size={12} className="text-blue-500" />;
-      case 'gpt-4o':
-        return <BrainCircuit size={12} className="text-purple-500" />;
-      default:
-        return <Cpu size={12} className="text-gray-500" />;
+      setMessages(prev => [...prev, { 
+        role: 'assistant', 
+        content: 'Sorry, I encountered an error processing your request. Please try again.' 
+      }]);
     }
   };
 
   return (
-    <Card className="flex flex-col h-[calc(100vh-13rem)] shadow-lg border rounded-lg relative">
-      <CardHeader className="py-3 px-4 border-b">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-lg font-medium">AI Assistant {isAdmin() ? '(Admin)' : '(Staff)'}</CardTitle>
-          <div className="flex items-center gap-2">
-            <Select value={model} onValueChange={(value) => setModel(value as 'gpt-3.5-turbo' | 'gpt-4o')}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Select Model" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="gpt-3.5-turbo">
-                  <div className="flex items-center gap-2">
-                    <Zap className="h-4 w-4 text-blue-500" />
-                    <span>GPT 3.5 Turbo</span>
-                    <span className="text-xs text-muted-foreground">(Fast)</span>
+    <Card className="h-[calc(100vh-12rem)] flex flex-col">
+      <CardContent className="flex flex-col h-full pt-6">
+        <div className="flex-1 overflow-auto mb-4 space-y-4">
+          {messages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-center p-6">
+              <div className="bg-primary/10 p-3 rounded-full mb-4">
+                {model === 'gpt-3.5-turbo' ? (
+                  <Zap className="h-6 w-6 text-primary" />
+                ) : (
+                  <BrainCircuit className="h-6 w-6 text-primary" />
+                )}
+              </div>
+              <h3 className="text-xl font-medium mb-2">
+                {isAdmin() ? 'Admin AI Assistant' : 'Staff AI Assistant'}
+              </h3>
+              <p className="text-muted-foreground mb-4">
+                Ask me anything about candidates, jobs, or how to use the ATS system.
+                <br />
+                I can help with searching, matching, and managing your recruitment workflow.
+              </p>
+              <div className="grid grid-cols-2 gap-2 w-full max-w-md">
+                <Button 
+                  variant="outline" 
+                  className="justify-start" 
+                  onClick={() => setInputValue("Find candidates with React experience")}
+                >
+                  Find React candidates
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="justify-start" 
+                  onClick={() => setInputValue("Summarize the top 3 candidates for Senior Developer role")}
+                >
+                  Rank top candidates
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="justify-start" 
+                  onClick={() => setInputValue("Create a new job posting for Senior DevOps Engineer")}
+                >
+                  Create job posting
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="justify-start" 
+                  onClick={() => setInputValue("Help me write an email to follow up with a candidate")}
+                >
+                  Draft candidate email
+                </Button>
+              </div>
+              <div className="mt-4 text-xs text-muted-foreground">
+                {model === 'gpt-3.5-turbo' ? (
+                  <div className="flex items-center">
+                    <Zap className="h-3 w-3 mr-1" />
+                    <span>Using GPT-3.5 Turbo for faster responses</span>
                   </div>
-                </SelectItem>
-                <SelectItem value="gpt-4o">
-                  <div className="flex items-center gap-2">
-                    <BrainCircuit className="h-4 w-4 text-purple-500" />
-                    <span>GPT 4o</span>
-                    <span className="text-xs text-muted-foreground">(Smart)</span>
+                ) : (
+                  <div className="flex items-center">
+                    <BrainCircuit className="h-3 w-3 mr-1" />
+                    <span>Using GPT-4o for advanced capabilities</span>
                   </div>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={clearChat}
-              title="Clear conversation"
-            >
-              <RotateCwIcon size={16} />
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-      
-      <ScrollArea className="flex-1 p-4">
-        <div className="space-y-4">
-          {messages.map((message, i) => (
-            <div
-              key={i}
-              className={`flex gap-3 ${
-                message.role === 'user' ? 'justify-end' : 'justify-start'
-              }`}
-            >
-              <div
-                className={`rounded-lg px-4 py-2 max-w-[80%] ${
-                  message.role === 'user'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-secondary text-secondary-foreground'
-                }`}
+                )}
+              </div>
+            </div>
+          ) : (
+            messages.map((message, index) => (
+              <div 
+                key={index} 
+                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
-                <div className="flex flex-col">
-                  <div className="whitespace-pre-wrap">{message.content}</div>
-                  <div className={`text-xs mt-1 flex items-center gap-1 ${
+                <div 
+                  className={`px-4 py-2 rounded-lg max-w-[80%] ${
                     message.role === 'user' 
-                      ? 'text-primary-foreground/70'
-                      : 'text-secondary-foreground/70'
-                  }`}>
-                    {message.role === 'assistant' && getModelIcon(message.model)}
-                    <span>{formatDate(message.timestamp)}</span>
-                  </div>
+                      ? 'bg-primary text-primary-foreground' 
+                      : 'bg-muted'
+                  }`}
+                >
+                  {message.content}
+                </div>
+              </div>
+            ))
+          )}
+          {isLoading && (
+            <div className="flex justify-start">
+              <div className="px-4 py-2 rounded-lg bg-muted">
+                <div className="flex space-x-2">
+                  <div className="w-2 h-2 rounded-full bg-current animate-bounce" />
+                  <div className="w-2 h-2 rounded-full bg-current animate-bounce [animation-delay:0.2s]" />
+                  <div className="w-2 h-2 rounded-full bg-current animate-bounce [animation-delay:0.4s]" />
                 </div>
               </div>
             </div>
-          ))}
-          <div ref={messagesEndRef} />
+          )}
         </div>
-      </ScrollArea>
-      
-      <CardFooter className="pt-2 border-t p-3">
-        <form onSubmit={handleSubmit} className="flex gap-2 w-full">
-          <Textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Type your message here..."
-            className="min-h-[60px] resize-none"
+        
+        <div className="flex gap-2">
+          <Input
+            placeholder="Type your message..."
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+            className="flex-1"
             disabled={isLoading}
           />
-          <div className="flex flex-col gap-2">
-            <Button
-              type="button"
-              size="icon"
-              variant="outline"
-              title="Attach file"
-              disabled={true} // File attachment functionality to be implemented later
-            >
-              <PaperclipIcon size={18} />
-            </Button>
-            <Button
-              type="submit"
-              size="icon"
-              variant="default"
-              disabled={isLoading || !input.trim()}
-              title="Send message"
-            >
-              <SendIcon size={18} />
-            </Button>
-          </div>
-        </form>
-      </CardFooter>
-      
-      {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-10">
-          <div className="flex flex-col items-center gap-2">
-            {model === 'gpt-3.5-turbo' ? (
-              <Zap className="h-10 w-10 animate-pulse text-blue-500" />
-            ) : (
-              <BrainCircuit className="h-10 w-10 animate-pulse text-purple-500" />
-            )}
-            <p className="text-sm font-medium">Processing with {model}...</p>
-          </div>
+          <Button onClick={handleSendMessage} disabled={isLoading || !inputValue.trim()}>
+            Send
+          </Button>
         </div>
-      )}
+      </CardContent>
     </Card>
   );
-};
-
-export default ChatAssistant;
+}

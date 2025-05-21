@@ -71,6 +71,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setUser(data.user);
       const role = await getUserProfile(data.user?.id);
       
+      toast({
+        title: "Login successful",
+        description: `Welcome back, ${data.user?.email}`,
+      });
+      
       return { data, error: null };
     } catch (error) {
       console.error('Error signing in:', error);
@@ -87,6 +92,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setUser(null);
       setUserRole(null);
       navigate('/login');
+      
+      toast({
+        title: "Signed out",
+        description: "You have been successfully signed out",
+      });
       
       return { error: null };
     } catch (error) {

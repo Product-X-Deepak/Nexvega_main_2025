@@ -15,7 +15,7 @@ const queryClient = new QueryClient();
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <BrowserRouter>
-      <ThemeProvider>
+      <ThemeProvider defaultTheme="system">
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
             <App />

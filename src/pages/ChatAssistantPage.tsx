@@ -5,23 +5,67 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Zap, BrainCircuit } from 'lucide-react';
+import { useState } from 'react';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export default function ChatAssistantPage() {
   const { isAdmin } = useAuth();
+  const [selectedModel, setSelectedModel] = useState<string>("gpt-3.5-turbo");
 
   return (
     <MainLayout>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold">AI Assistant</h1>
-          <p className="text-gray-500 dark:text-gray-400">
-            {isAdmin() ? 'Admin Assistant with full system access' : 'Staff Assistant with limited access'}
-          </p>
+        <div className="flex justify-between items-start">
+          <div>
+            <h1 className="text-2xl font-bold">AI Assistant</h1>
+            <p className="text-gray-500 dark:text-gray-400">
+              {isAdmin() ? 'Admin Assistant with full system access' : 'Staff Assistant with limited access'}
+            </p>
+          </div>
+          
+          <div className="w-64">
+            <Select 
+              value={selectedModel} 
+              onValueChange={setSelectedModel}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select Model" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectLabel>AI Models</SelectLabel>
+                  <SelectItem value="gpt-3.5-turbo">
+                    <div className="flex items-center gap-2">
+                      <Zap className="h-4 w-4 text-blue-500" />
+                      <span>GPT-3.5 Turbo (Fast)</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="gpt-4o">
+                    <div className="flex items-center gap-2">
+                      <BrainCircuit className="h-4 w-4 text-purple-500" />
+                      <span>GPT-4o (Advanced)</span>
+                    </div>
+                  </SelectItem>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-1">
+              Currently using: {selectedModel === "gpt-3.5-turbo" ? "GPT-3.5 Turbo (Faster)" : "GPT-4o (More powerful)"}
+            </p>
+          </div>
         </div>
         
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           <div className="lg:col-span-3">
-            <ChatAssistant />
+            <ChatAssistant model={selectedModel} />
           </div>
           
           <div className="lg:col-span-1 space-y-4">
