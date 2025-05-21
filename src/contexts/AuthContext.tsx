@@ -2,6 +2,8 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { UserRole } from '@/types';
+import { useNavigate } from 'react-router-dom';
+import { useToast } from '@/hooks/use-toast';
 
 interface AuthContextType {
   user: any | null;
@@ -35,12 +37,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<any | null>(null);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
+  const navigate = useNavigate();
 
   const getUserProfile = async (userId: string) => {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('role')
+        .select('role, full_name, email')
         .eq('id', userId)
         .single();
 
@@ -65,7 +69,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (error) throw error;
       
       setUser(data.user);
-      await getUserProfile(data.user?.id);
+      const role = await getUserProfile(data.user?.id);
       
       return { data, error: null };
     } catch (error) {
@@ -82,6 +86,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       
       setUser(null);
       setUserRole(null);
+      navigate('/login');
       
       return { error: null };
     } catch (error) {
@@ -117,21 +122,45 @@ export function AuthProvider({ children }: AuthProviderProps) {
   useEffect(() => {
     checkSession();
     
-    // Set up auth state change listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session?.user) {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
         setUser(session.user);
-        getUserProfile(session.user.id);
-      } else {
+        const role = await getUserProfile(session.user.id);
+        
+        // Redirect based on role
+        if (role === 'client') {
+          navigate('/client');
+        } else {
+          navigate('/dashboard');
+        }
+      } else if (event === 'SIGNED_OUT') {
         setUser(null);
         setUserRole(null);
+        navigate('/login');
       }
     });
     
     return () => {
       subscription.unsubscribe();
     };
-  }, []);
+  }, [navigate]);
+
+  // Add an additional effect for navigation logic based on auth state
+  useEffect(() => {
+    if (!loading) {
+      if (!user && window.location.pathname !== '/login' && 
+          window.location.pathname !== '/privacy-policy' && 
+          window.location.pathname !== '/help') {
+        navigate('/login');
+      } else if (user && window.location.pathname === '/login') {
+        if (userRole === 'client') {
+          navigate('/client');
+        } else {
+          navigate('/dashboard');
+        }
+      }
+    }
+  }, [user, loading, userRole, navigate]);
 
   const hasPermission = (requiredRoles: UserRole[]) => {
     if (!userRole) return false;

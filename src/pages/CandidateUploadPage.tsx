@@ -6,18 +6,13 @@ import MainLayout from '@/components/layout/MainLayout';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { 
-  XMarkIcon, 
-  CloudArrowUpIcon, 
-  DocumentIcon, 
-  ExclamationTriangleIcon, 
-  TrashIcon,
-  DocumentCheckIcon,
-  DocumentPlusIcon
-} from '@heroicons/react/24/outline';
-import { processMultipleResumes, saveProcessedCandidate } from '@/services/resumeService';
-import { Progress } from '@/components/ui/progress';
 import { useAuth } from '@/contexts/AuthContext';
+import { 
+  processMultipleResumes, 
+  saveProcessedCandidate 
+} from '@/services/resumeService';
+import { Progress } from '@/components/ui/progress';
+import { Loader2, Upload, File, AlertTriangle, CheckCircle, Trash2 } from 'lucide-react';
 
 interface FileWithPreview extends File {
   preview?: string;
@@ -101,6 +96,15 @@ export default function CandidateUploadPage() {
       return;
     }
     
+    if (!user?.id) {
+      toast({
+        title: 'Authentication required',
+        description: 'You must be logged in to upload resumes',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
     setIsUploading(true);
     setUploadProgress({
       completed: 0,
@@ -111,15 +115,17 @@ export default function CandidateUploadPage() {
     
     try {
       // Process all resumes
-      const { processed, failed } = await processMultipleResumes(files);
+      const { processed, failed } = await processMultipleResumes(files, user.id);
       
       // Save processed candidates to database
       for (const item of processed) {
         try {
           const candidateData = {
-            ...item.candidateData,
-            created_by: user?.id,
-            resumeText: item.resumeText // This isn't saved to DB but used for embedding generation
+            ...item.parsedData,
+            resumeId: item.resumeId,
+            resumeUrl: item.resumeUrl,
+            created_by: user.id,
+            resumeText: item.resumeText // Used for embedding, not stored directly
           };
           
           await saveProcessedCandidate(candidateData);
@@ -198,7 +204,7 @@ export default function CandidateUploadPage() {
               `}
             >
               <input {...getInputProps()} />
-              <CloudArrowUpIcon className="mx-auto h-12 w-12 text-gray-400" />
+              <Upload className="mx-auto h-12 w-12 text-gray-400" />
               <p className="mt-2 text-sm text-gray-600">
                 Drag &amp; drop resume files here, or click to select files
               </p>
@@ -217,7 +223,7 @@ export default function CandidateUploadPage() {
                     onClick={clearAllFiles}
                     disabled={isUploading}
                   >
-                    <TrashIcon className="h-4 w-4 mr-1" />
+                    <Trash2 className="h-4 w-4 mr-1" />
                     Clear All
                   </Button>
                 </div>
@@ -229,18 +235,15 @@ export default function CandidateUploadPage() {
                       className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800 rounded-md"
                     >
                       <div className="flex items-center gap-2 overflow-hidden">
-                        {file.type === 'application/pdf' ? (
-                          <DocumentIcon className="h-5 w-5 text-red-500" />
-                        ) : file.type.includes('word') ? (
-                          <DocumentIcon className="h-5 w-5 text-blue-500" />
-                        ) : file.type.includes('csv') || file.type.includes('sheet') ? (
-                          <DocumentIcon className="h-5 w-5 text-green-500" />
-                        ) : (
-                          <DocumentIcon className="h-5 w-5 text-gray-500" />
-                        )}
+                        <File className={`h-5 w-5 ${
+                          file.type === 'application/pdf' ? 'text-red-500' : 
+                          file.type.includes('word') ? 'text-blue-500' : 
+                          file.type.includes('csv') || file.type.includes('sheet') ? 'text-green-500' : 
+                          'text-gray-500'
+                        }`} />
                         <span className="text-sm truncate max-w-xs">{file.name}</span>
                         {file.error && (
-                          <ExclamationTriangleIcon className="h-4 w-4 text-red-500" />
+                          <AlertTriangle className="h-4 w-4 text-red-500" />
                         )}
                       </div>
                       <Button
@@ -250,7 +253,7 @@ export default function CandidateUploadPage() {
                         onClick={() => removeFile(file)}
                         disabled={isUploading}
                       >
-                        <XMarkIcon className="h-4 w-4" />
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   ))}
@@ -272,11 +275,11 @@ export default function CandidateUploadPage() {
                 />
                 <div className="flex justify-between mt-2 text-xs text-muted-foreground">
                   <span className="flex items-center">
-                    <DocumentCheckIcon className="h-4 w-4 text-green-500 mr-1" />
+                    <CheckCircle className="h-4 w-4 text-green-500 mr-1" />
                     Success: {uploadProgress.success}
                   </span>
                   <span className="flex items-center">
-                    <ExclamationTriangleIcon className="h-4 w-4 text-red-500 mr-1" />
+                    <AlertTriangle className="h-4 w-4 text-red-500 mr-1" />
                     Failed: {uploadProgress.failed}
                   </span>
                 </div>
@@ -286,7 +289,7 @@ export default function CandidateUploadPage() {
             {!files.length && !isUploading && (
               <div className="mt-4 flex justify-center">
                 <Button onClick={() => document.querySelector<HTMLInputElement>('input[type="file"]')?.click()}>
-                  <DocumentPlusIcon className="h-4 w-4 mr-2" />
+                  <File className="h-4 w-4 mr-2" />
                   Select Files
                 </Button>
               </div>
@@ -304,7 +307,14 @@ export default function CandidateUploadPage() {
               onClick={handleUpload}
               disabled={files.length === 0 || isUploading}
             >
-              {isUploading ? 'Processing...' : 'Upload & Process'}
+              {isUploading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                'Upload & Process'
+              )}
             </Button>
           </CardFooter>
         </Card>

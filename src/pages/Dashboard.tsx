@@ -2,25 +2,42 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import MainLayout from '@/components/layout/MainLayout';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/integrations/supabase/client';
 import { Bar, BarChart, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { 
-  UserIcon,
-  BriefcaseIcon,
-  UserGroupIcon,
-  DocumentTextIcon
-} from '@heroicons/react/24/outline';
+  User, 
+  Building, 
+  Users,
+  FileText
+} from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+
+interface DashboardStats {
+  candidates: number;
+  clients: number;
+  jobs: number;
+  resumes: number;
+}
+
+interface Activity {
+  id: number;
+  type: 'candidate' | 'job' | 'client';
+  action: string;
+  name: string;
+  timestamp: string;
+  user: string;
+}
 
 export default function Dashboard() {
   const { user, isAdmin, isStaff } = useAuth();
-  const [stats, setStats] = useState({
+  const [stats, setStats] = useState<DashboardStats>({
     candidates: 0,
     clients: 0,
     jobs: 0,
     resumes: 0
   });
-  const [recentActivities, setRecentActivities] = useState([]);
+  const [recentActivities, setRecentActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
@@ -121,31 +138,37 @@ export default function Dashboard() {
     fetchStats();
   }, []);
 
-  const StatCard = ({ title, value, icon: Icon, bgColor, onClick }) => (
-    <div 
-      className={`overflow-hidden rounded-lg ${bgColor} shadow hover:shadow-lg transition-shadow cursor-pointer`}
+  interface StatCardProps {
+    title: string;
+    value: number;
+    icon: React.ElementType;
+    bgColor: string;
+    onClick: () => void;
+  }
+
+  const StatCard = ({ title, value, icon: Icon, bgColor, onClick }: StatCardProps) => (
+    <Card 
+      className={`overflow-hidden ${bgColor} hover:shadow-lg transition-shadow cursor-pointer`}
       onClick={onClick}
     >
-      <div className="px-4 py-5 sm:p-6">
+      <CardContent className="p-6">
         <div className="flex items-center">
           <div className="flex-shrink-0 bg-white/10 rounded-md p-3">
             <Icon className="h-6 w-6 text-white" aria-hidden="true" />
           </div>
           <div className="ml-5 w-0 flex-1">
-            <dt className="text-sm font-medium text-white truncate">{title}</dt>
-            <dd className="flex items-baseline">
-              <div className="text-2xl font-semibold text-white">
-                {loading ? (
-                  <div className="animate-pulse h-8 w-16 bg-white/20 rounded"></div>
-                ) : (
-                  value
-                )}
-              </div>
-            </dd>
+            <p className="text-sm font-medium text-white truncate">{title}</p>
+            <div className="text-2xl font-semibold text-white">
+              {loading ? (
+                <div className="animate-pulse h-8 w-16 bg-white/20 rounded"></div>
+              ) : (
+                value
+              )}
+            </div>
           </div>
         </div>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 
   return (
@@ -161,28 +184,28 @@ export default function Dashboard() {
           <StatCard
             title="Total Candidates"
             value={stats.candidates}
-            icon={UserIcon}
+            icon={User}
             bgColor="bg-blue-600"
             onClick={() => navigate('/candidates')}
           />
           <StatCard
             title="Clients"
             value={stats.clients}
-            icon={UserGroupIcon}
+            icon={Building}
             bgColor="bg-indigo-600"
             onClick={() => navigate('/clients')}
           />
           <StatCard
             title="Open Jobs"
             value={stats.jobs}
-            icon={BriefcaseIcon}
+            icon={Users}
             bgColor="bg-purple-600"
             onClick={() => navigate('/jobs')}
           />
           <StatCard
             title="Resumes Processed"
             value={stats.resumes}
-            icon={DocumentTextIcon}
+            icon={FileText}
             bgColor="bg-pink-600"
             onClick={() => navigate('/candidates')}
           />
@@ -191,11 +214,11 @@ export default function Dashboard() {
         {/* Two column layout for charts and activity */}
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
           {/* Pipeline Chart */}
-          <div className="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
-            <div className="px-4 py-5 sm:px-6">
-              <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-white">Candidate Pipeline</h3>
-            </div>
-            <div className="px-4 sm:px-6 py-3 h-80">
+          <Card>
+            <CardHeader>
+              <CardTitle>Candidate Pipeline</CardTitle>
+            </CardHeader>
+            <CardContent className="h-80">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                   data={pipelineData}
@@ -213,15 +236,15 @@ export default function Dashboard() {
                   <Bar dataKey="count" fill="#4f46e5" />
                 </BarChart>
               </ResponsiveContainer>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
 
           {/* Recent Activity */}
-          <div className="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
-            <div className="px-4 py-5 sm:px-6">
-              <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-white">Recent Activity</h3>
-            </div>
-            <div className="bg-white dark:bg-gray-800 shadow overflow-hidden sm:rounded-md">
+          <Card>
+            <CardHeader>
+              <CardTitle>Recent Activity</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
               <ul className="divide-y divide-gray-200 dark:divide-gray-700">
                 {loading ? (
                   Array(5).fill(0).map((_, i) => (
@@ -236,13 +259,13 @@ export default function Dashboard() {
                     </li>
                   ))
                 ) : (
-                  recentActivities.map((activity: any) => (
+                  recentActivities.map((activity: Activity) => (
                     <li key={activity.id} className="px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-700">
                       <div className="flex items-center space-x-4">
                         <div className="flex-shrink-0">
-                          {activity.type === 'candidate' && <UserIcon className="h-6 w-6 text-blue-500" />}
-                          {activity.type === 'job' && <BriefcaseIcon className="h-6 w-6 text-purple-500" />}
-                          {activity.type === 'client' && <UserGroupIcon className="h-6 w-6 text-indigo-500" />}
+                          {activity.type === 'candidate' && <User className="h-6 w-6 text-blue-500" />}
+                          {activity.type === 'job' && <FileText className="h-6 w-6 text-purple-500" />}
+                          {activity.type === 'client' && <Building className="h-6 w-6 text-indigo-500" />}
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
@@ -260,57 +283,48 @@ export default function Dashboard() {
                   ))
                 )}
               </ul>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Admin Only Section */}
         {isAdmin() && (
-          <div className="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
-            <div className="px-4 py-5 sm:px-6">
-              <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-white">Admin Tools</h3>
-              <p className="mt-1 max-w-2xl text-sm text-gray-500 dark:text-gray-400">
+          <Card>
+            <CardHeader>
+              <CardTitle>Admin Tools</CardTitle>
+              <CardDescription>
                 Quick access to administrative functions
-              </p>
-            </div>
-            <div className="px-4 py-5 sm:p-6">
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                <div 
-                  className="bg-white dark:bg-gray-700 overflow-hidden shadow rounded-lg cursor-pointer hover:shadow-md transition-shadow"
-                  onClick={() => navigate('/users')}
-                >
-                  <div className="px-4 py-5 sm:p-6">
+                <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate('/users')}>
+                  <CardContent className="p-6">
                     <div className="flex items-center">
-                      <UserIcon className="h-6 w-6 text-indigo-500" />
-                      <span className="ml-3 text-base font-medium text-gray-900 dark:text-white">Manage Users</span>
+                      <User className="h-6 w-6 text-indigo-500" />
+                      <span className="ml-3 text-base font-medium">Manage Users</span>
                     </div>
-                  </div>
-                </div>
-                <div 
-                  className="bg-white dark:bg-gray-700 overflow-hidden shadow rounded-lg cursor-pointer hover:shadow-md transition-shadow"
-                  onClick={() => navigate('/settings')}
-                >
-                  <div className="px-4 py-5 sm:p-6">
+                  </CardContent>
+                </Card>
+                <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate('/settings')}>
+                  <CardContent className="p-6">
                     <div className="flex items-center">
-                      <UserIcon className="h-6 w-6 text-purple-500" />
-                      <span className="ml-3 text-base font-medium text-gray-900 dark:text-white">System Settings</span>
+                      <User className="h-6 w-6 text-purple-500" />
+                      <span className="ml-3 text-base font-medium">System Settings</span>
                     </div>
-                  </div>
-                </div>
-                <div 
-                  className="bg-white dark:bg-gray-700 overflow-hidden shadow rounded-lg cursor-pointer hover:shadow-md transition-shadow"
-                  onClick={() => navigate('/analytics')}
-                >
-                  <div className="px-4 py-5 sm:p-6">
+                  </CardContent>
+                </Card>
+                <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate('/analytics')}>
+                  <CardContent className="p-6">
                     <div className="flex items-center">
-                      <UserIcon className="h-6 w-6 text-blue-500" />
-                      <span className="ml-3 text-base font-medium text-gray-900 dark:text-white">Analytics Dashboard</span>
+                      <User className="h-6 w-6 text-blue-500" />
+                      <span className="ml-3 text-base font-medium">Analytics Dashboard</span>
                     </div>
-                  </div>
-                </div>
+                  </CardContent>
+                </Card>
               </div>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         )}
       </div>
     </MainLayout>

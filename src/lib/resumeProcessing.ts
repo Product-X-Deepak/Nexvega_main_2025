@@ -17,61 +17,86 @@ export async function extractTextFromFile(file: File): Promise<string> {
   
   switch (fileType) {
     case FileType.PDF: {
-      const pdfParse = await import('pdf-parse');
-      const pdfData = await pdfParse.default(Buffer.from(arrayBuffer));
-      return pdfData.text;
+      try {
+        const pdfParse = await import('pdf-parse');
+        const pdfData = await pdfParse.default(Buffer.from(arrayBuffer));
+        return pdfData.text;
+      } catch (error) {
+        console.error('Error parsing PDF:', error);
+        throw new Error(`Failed to parse PDF: ${error.message}`);
+      }
     }
       
     case FileType.DOC:
     case FileType.DOCX: {
-      const mammoth = await import('mammoth');
-      const docData = await mammoth.extractRawText({
-        arrayBuffer: arrayBuffer
-      });
-      return docData.value;
+      try {
+        const mammoth = await import('mammoth');
+        const docData = await mammoth.extractRawText({
+          arrayBuffer: arrayBuffer
+        });
+        return docData.value;
+      } catch (error) {
+        console.error('Error parsing DOC/DOCX:', error);
+        throw new Error(`Failed to parse document: ${error.message}`);
+      }
     }
       
     case FileType.CSV: {
-      // For CSV, we parse and join the data manually
-      const textDecoder = new TextDecoder('utf-8');
-      const csvString = textDecoder.decode(arrayBuffer);
-      
-      // Split the CSV string into lines and process
-      const lines = csvString.split('\n');
-      if (lines.length === 0) return '';
-      
-      const headers = lines[0].split(',');
-      const results: string[] = [];
-      
-      // Process each line (skip header)
-      for (let i = 1; i < lines.length; i++) {
-        if (!lines[i].trim()) continue;
+      try {
+        // For CSV, we parse and join the data manually
+        const textDecoder = new TextDecoder('utf-8');
+        const csvString = textDecoder.decode(arrayBuffer);
         
-        const values = lines[i].split(',');
-        const row: Record<string, string> = {};
+        // Split the CSV string into lines and process
+        const lines = csvString.split('\n');
+        if (lines.length === 0) return '';
         
-        headers.forEach((header, index) => {
-          row[header.trim()] = values[index]?.trim() || '';
-        });
+        const headers = lines[0].split(',');
+        const results: string[] = [];
         
-        results.push(Object.values(row).join(' '));
+        // Process each line (skip header)
+        for (let i = 1; i < lines.length; i++) {
+          if (!lines[i].trim()) continue;
+          
+          const values = lines[i].split(',');
+          const row: Record<string, string> = {};
+          
+          headers.forEach((header, index) => {
+            row[header.trim()] = values[index]?.trim() || '';
+          });
+          
+          results.push(Object.values(row).join(' '));
+        }
+        
+        return results.join('\n');
+      } catch (error) {
+        console.error('Error parsing CSV:', error);
+        throw new Error(`Failed to parse CSV: ${error.message}`);
       }
-      
-      return results.join('\n');
     }
       
     case FileType.EXCEL: {
-      const XLSX = await import('xlsx');
-      const workbook = XLSX.read(new Uint8Array(arrayBuffer), {type: 'array'});
-      const firstSheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[firstSheetName];
-      const jsonData = XLSX.utils.sheet_to_json(worksheet);
-      return jsonData.map(row => Object.values(row).join(' ')).join('\n');
+      try {
+        const XLSX = await import('xlsx');
+        const workbook = XLSX.read(new Uint8Array(arrayBuffer), {type: 'array'});
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+        return jsonData.map(row => Object.values(row).join(' ')).join('\n');
+      } catch (error) {
+        console.error('Error parsing Excel:', error);
+        throw new Error(`Failed to parse Excel: ${error.message}`);
+      }
     }
       
     case FileType.TEXT: {
-      const textDecoder = new TextDecoder('utf-8');
-      return textDecoder.decode(arrayBuffer);
+      try {
+        const textDecoder = new TextDecoder('utf-8');
+        return textDecoder.decode(arrayBuffer);
+      } catch (error) {
+        console.error('Error parsing text file:', error);
+        throw new Error(`Failed to parse text file: ${error.message}`);
+      }
     }
       
     default:
@@ -79,28 +104,34 @@ export async function extractTextFromFile(file: File): Promise<string> {
   }
 }
 
-export async function uploadResumeFile(file: File): Promise<{ resumeId: string, resumeUrl: string }> {
-  const resumeId = uuidv4();
-  const fileExt = file.name.split('.').pop();
-  const filePath = `resumes/${resumeId}.${fileExt}`;
-  
-  const { error: uploadError } = await supabase.storage
-    .from('resume_files')
-    .upload(filePath, file);
+export async function uploadResumeFile(file: File, userId: string): Promise<{ resumeId: string, resumeUrl: string }> {
+  try {
+    const resumeId = uuidv4();
+    const timestamp = Date.now();
+    const fileExt = file.name.split('.').pop();
+    const filePath = `${userId}_${timestamp}_${resumeId}.${fileExt}`;
     
-  if (uploadError) {
-    throw new Error(`Error uploading resume: ${uploadError.message}`);
+    const { error: uploadError, data } = await supabase.storage
+      .from('resumes')
+      .upload(filePath, file);
+      
+    if (uploadError) {
+      throw new Error(`Error uploading resume: ${uploadError.message}`);
+    }
+    
+    // Get the public URL for the resume
+    const { data: urlData } = supabase.storage
+      .from('resumes')
+      .getPublicUrl(filePath);
+      
+    return { 
+      resumeId: filePath, 
+      resumeUrl: urlData.publicUrl 
+    };
+  } catch (error) {
+    console.error('Error in uploadResumeFile:', error);
+    throw error;
   }
-  
-  // Get the public URL for the resume
-  const { data: urlData } = supabase.storage
-    .from('resume_files')
-    .getPublicUrl(filePath);
-    
-  return { 
-    resumeId, 
-    resumeUrl: urlData.publicUrl 
-  };
 }
 
 export async function parseResumeText(resumeText: string) {
@@ -110,7 +141,10 @@ export async function parseResumeText(resumeText: string) {
       body: { resumeText }
     });
     
-    if (error) throw new Error(`Error parsing resume: ${error.message}`);
+    if (error) {
+      console.error('Error calling parse-resume function:', error);
+      throw new Error(`Error parsing resume: ${error.message}`);
+    }
     
     if (!data?.success || !data?.data) {
       throw new Error('Failed to parse resume data');
@@ -123,46 +157,52 @@ export async function parseResumeText(resumeText: string) {
   }
 }
 
-export async function processResume(file: File): Promise<{ resumeId: string, candidateData: any }> {
+export async function processResume(file: File, userId: string) {
   try {
+    console.log(`Processing resume: ${file.name} (${file.type})`);
+    
     // Extract text from the file
     const text = await extractTextFromFile(file);
+    console.log(`Successfully extracted text from ${file.name}, length: ${text.length} chars`);
     
     // Upload the raw file to Supabase Storage
-    const { resumeId, resumeUrl } = await uploadResumeFile(file);
+    const { resumeId, resumeUrl } = await uploadResumeFile(file, userId);
+    console.log(`Successfully uploaded resume to storage: ${resumeId}`);
     
     // Parse the resume text to extract structured data
+    console.log('Sending resume text to OpenAI for parsing...');
     const parsedData = await parseResumeText(text);
+    console.log('Successfully parsed resume data:', parsedData);
     
-    // Prepare candidate data
-    const candidateData = {
-      ...parsedData,
-      resume_id: resumeId,
-      resume_url: resumeUrl,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      status: 'active'
+    return {
+      resumeId,
+      resumeUrl,
+      parsedData,
+      resumeText: text
     };
-    
-    return { resumeId, candidateData };
   } catch (error) {
     console.error('Resume processing error:', error);
     throw error;
   }
 }
 
-export async function processMultipleResumes(files: File[]): Promise<{ processed: any[], failed: any[] }> {
+export async function processMultipleResumes(files: File[], userId: string): Promise<{ processed: any[], failed: any[] }> {
   const processed: any[] = [];
   const failed: any[] = [];
   
   for (const file of files) {
     try {
-      const result = await processResume(file);
+      console.log(`Processing file: ${file.name}`);
+      const result = await processResume(file, userId);
+      
       processed.push({
         filename: file.name,
         ...result
       });
+      
+      console.log(`Successfully processed resume: ${file.name}`);
     } catch (error) {
+      console.error(`Failed to process file ${file.name}:`, error);
       failed.push({
         filename: file.name,
         error: (error as Error).message
@@ -173,21 +213,9 @@ export async function processMultipleResumes(files: File[]): Promise<{ processed
   return { processed, failed };
 }
 
-export async function saveProcessedCandidateToDatabase(candidateData: any) {
+export async function saveProcessedCandidate(candidateData: any, userId: string) {
   try {
-    // Insert the candidate data
-    const { data, error } = await supabase
-      .from('candidates')
-      .insert(candidateData)
-      .select('id');
-      
-    if (error) throw new Error(`Error saving candidate data: ${error.message}`);
-    
-    if (!data || data.length === 0) {
-      throw new Error('No candidate data returned after insert');
-    }
-    
-    const candidateId = data[0].id;
+    console.log('Saving candidate to database:', candidateData);
     
     // Generate embedding for the candidate
     const resumeTextForEmbedding = `
@@ -195,21 +223,102 @@ export async function saveProcessedCandidateToDatabase(candidateData: any) {
       ${candidateData.resume_summary || ''} 
       ${candidateData.skills?.join(' ') || ''} 
       ${candidateData.experience?.map((exp: any) => 
-        `${exp.title} ${exp.company} ${exp.responsibilities?.join(' ')}`
+        `${exp.title || ''} ${exp.company || ''} ${exp.responsibilities?.join(' ') || ''}`
       ).join(' ') || ''}
     `;
     
-    await supabase.functions.invoke('generate-embeddings', {
-      body: {
-        recordId: candidateId,
-        recordType: 'candidate',
-        text: resumeTextForEmbedding
-      }
-    });
+    // Prepare data for insertion
+    const dataToInsert = {
+      full_name: candidateData.full_name || null,
+      email: candidateData.email || null,
+      phone: candidateData.phone || null,
+      linkedin_url: candidateData.linkedin_url || null,
+      other_links: candidateData.other_links || [],
+      social_media: candidateData.social_media || {},
+      resume_summary: candidateData.resume_summary || null,
+      objective: candidateData.objective || null,
+      skills: candidateData.skills || [],
+      languages: candidateData.languages || [],
+      education: candidateData.education || [],
+      experience: candidateData.experience || [],
+      projects: candidateData.projects || [],
+      publications: candidateData.publications || [],
+      resume_id: candidateData.resumeId || null,
+      resume_url: candidateData.resumeUrl || null,
+      status: 'active',
+      pipeline_stage: 'new_candidate',
+      created_by: userId,
+      updated_at: new Date().toISOString()
+    };
     
-    return candidateId;
+    // Insert the candidate data
+    const { data, error } = await supabase
+      .from('candidates')
+      .insert(dataToInsert)
+      .select();
+      
+    if (error) {
+      console.error('Error inserting candidate data:', error);
+      throw error;
+    }
+    
+    // Generate embedding asynchronously
+    if (resumeTextForEmbedding.trim().length > 10 && data?.[0]?.id) {
+      try {
+        const { error: embeddingError } = await supabase.functions.invoke('generate-embeddings', {
+          body: {
+            recordId: data[0].id,
+            recordType: 'candidate',
+            text: resumeTextForEmbedding
+          }
+        });
+        
+        if (embeddingError) {
+          console.error('Error generating embeddings:', embeddingError);
+        }
+      } catch (embeddingError) {
+        console.error('Error calling embedding function:', embeddingError);
+      }
+    }
+    
+    return data?.[0]?.id;
   } catch (error) {
     console.error('Error saving candidate:', error);
     throw error;
   }
+}
+
+// Function to handle bulk resume processing and saving
+export async function processBulkResumes(files: File[], userId: string) {
+  const { processed, failed } = await processMultipleResumes(files, userId);
+  const savedIds: string[] = [];
+  const processingErrors: any[] = [];
+  
+  for (const item of processed) {
+    try {
+      const candidateData = {
+        ...item.parsedData,
+        resumeId: item.resumeId,
+        resumeUrl: item.resumeUrl,
+        resumeText: item.resumeText
+      };
+      
+      const candidateId = await saveProcessedCandidate(candidateData, userId);
+      if (candidateId) {
+        savedIds.push(candidateId);
+      }
+    } catch (error) {
+      processingErrors.push({
+        filename: item.filename,
+        error: (error as Error).message
+      });
+    }
+  }
+  
+  return {
+    processed: processed.length,
+    failed: failed.length + processingErrors.length,
+    savedIds,
+    errors: [...failed, ...processingErrors]
+  };
 }

@@ -1,105 +1,138 @@
 
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.4.0";
 
-// Initialize the Supabase client
-const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
-const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+const openAIApiKey = Deno.env.get("OPENAI_API_KEY");
+const supabaseUrl = Deno.env.get("SUPABASE_URL");
+const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+// Initialize Supabase client with service role key
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
 serve(async (req) => {
-  // Handle CORS preflight requests
-  if (req.method === "OPTIONS") {
-    return new Response(null, {
-      headers: corsHeaders,
-    });
+  // Handle CORS preflight request
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
   }
-
+  
   try {
-    const { jobId, limit = 20, saveResults = true } = await req.json();
+    // Ensure we have necessary API keys
+    if (!openAIApiKey) {
+      throw new Error("OpenAI API key not configured");
+    }
     
-    if (!jobId) {
+    if (!supabaseUrl || !supabaseServiceKey) {
+      throw new Error("Supabase credentials not configured");
+    }
+    
+    // Get request body
+    const { jobDescription, limit = 50, jobId = null } = await req.json();
+    
+    if (!jobDescription) {
       return new Response(
-        JSON.stringify({ error: "jobId parameter is required" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        JSON.stringify({ 
+          success: false,
+          error: "Missing required parameter: jobDescription is required" 
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
-
-    // First get the job's embedding
-    const { data: jobData, error: jobError } = await supabase
-      .from('jobs')
-      .select('embedding')
-      .eq('id', jobId)
-      .single();
-      
-    if (jobError) {
-      throw new Error(`Failed to fetch job: ${jobError.message}`);
+    
+    // Generate embedding for job description
+    console.log("Generating embedding for job description");
+    const embeddingResponse = await fetch("https://api.openai.com/v1/embeddings", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${openAIApiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "text-embedding-3-small",
+        input: jobDescription.substring(0, 8000)  // Limit to 8000 chars
+      })
+    });
+    
+    if (!embeddingResponse.ok) {
+      const errorData = await embeddingResponse.json();
+      console.error("OpenAI API error:", errorData);
+      throw new Error(`OpenAI API error: ${errorData.error?.message || "Unknown error"}`);
     }
     
-    if (!jobData.embedding) {
-      throw new Error('Job has no embedding. Generate an embedding first.');
+    const embeddingData = await embeddingResponse.json();
+    const jobEmbedding = embeddingData.data[0].embedding;
+    
+    // Store job embedding if jobId is provided
+    if (jobId) {
+      const { error: updateError } = await supabase
+        .from("jobs")
+        .update({ embedding: jobEmbedding })
+        .eq('id', jobId);
+        
+      if (updateError) {
+        console.error(`Error updating job with embedding: ${updateError.message}`);
+      } else {
+        console.log(`Successfully updated job ${jobId} with embedding`);
+      }
     }
     
-    // Use vector similarity search to find matching candidates
-    const { data: candidates, error: candidatesError } = await supabase
-      .rpc('match_candidates_to_job', {
-        query_embedding: jobData.embedding,
+    // Search for similar candidate vectors
+    const { data: matchedCandidates, error: searchError } = await supabase.rpc(
+      'match_candidates_by_vector',
+      {
+        query_embedding: jobEmbedding,
         match_threshold: 0.5,
         match_count: limit
-      });
-      
-    if (candidatesError) {
-      throw new Error(`Candidate matching failed: ${candidatesError.message}`);
+      }
+    );
+    
+    if (searchError) {
+      throw new Error(`Error searching candidates: ${searchError.message}`);
     }
-
-    // Save the match results if requested
-    if (saveResults && candidates.length > 0) {
-      const candidateIds = candidates.map((c: any) => c.id);
-      const scores = candidates.map((c: any) => c.similarity);
+    
+    // Store search results if jobId is provided
+    if (jobId && matchedCandidates.length > 0) {
+      const candidateIds = matchedCandidates.map(c => c.id);
+      const scores = matchedCandidates.map(c => c.similarity);
       
-      const { error: saveError } = await supabase
-        .from('search_results')
+      const { error: resultError } = await supabase
+        .from("search_results")
         .insert({
           job_id: jobId,
           candidate_ids: candidateIds,
           scores: scores,
-          created_by: req.headers.get('x-user-id') || null
+          created_at: new Date().toISOString(),
+          created_by: req.headers.get("x-supabase-auth-user-id") || null
         });
         
-      if (saveError) {
-        console.error('Error saving search results:', saveError.message);
+      if (resultError) {
+        console.error(`Error storing search results: ${resultError.message}`);
+      } else {
+        console.log(`Successfully stored search results for job ${jobId}`);
       }
     }
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        data: candidates,
-        message: `Found ${candidates.length} matching candidates for job ${jobId}`,
-      }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
-  } catch (error) {
-    console.error("Error matching candidates:", error);
+    
     return new Response(
       JSON.stringify({ 
-        success: false, 
-        error: error.message || "Failed to match candidates" 
+        success: true,
+        data: matchedCandidates
       }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+    );
+  } catch (error) {
+    console.error("Error in match-candidates function:", error);
+    
+    return new Response(
+      JSON.stringify({ 
+        success: false,
+        error: error.message
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }
 });
