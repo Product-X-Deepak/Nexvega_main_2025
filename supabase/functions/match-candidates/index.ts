@@ -96,7 +96,7 @@ serve(async (req) => {
     }
     
     // Store search results if jobId is provided
-    if (jobId && matchedCandidates.length > 0) {
+    if (jobId && matchedCandidates?.length > 0) {
       const candidateIds = matchedCandidates.map(c => c.id);
       const scores = matchedCandidates.map(c => c.similarity);
       
@@ -117,10 +117,20 @@ serve(async (req) => {
       }
     }
     
+    // Process candidates to add additional computed fields
+    const processedCandidates = matchedCandidates?.map(candidate => ({
+      ...candidate,
+      match_score: Math.round(candidate.similarity * 100),
+      // Calculate experience years (if the data structure allows)
+      experience_years: calculateExperienceYears(candidate.experience),
+      // Extract most relevant skills based on the job description
+      relevant_skills: extractRelevantSkills(candidate.skills, jobDescription)
+    })) || [];
+    
     return new Response(
       JSON.stringify({ 
         success: true,
-        data: matchedCandidates
+        data: processedCandidates || []
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );
@@ -136,3 +146,60 @@ serve(async (req) => {
     );
   }
 });
+
+// Calculate total years of experience from experience array
+function calculateExperienceYears(experienceArray: any[] | null): number {
+  if (!experienceArray || !Array.isArray(experienceArray) || experienceArray.length === 0) {
+    return 0;
+  }
+  
+  let totalMonths = 0;
+  
+  experienceArray.forEach(exp => {
+    // Skip if missing dates
+    if (!exp.start_date) return;
+    
+    const startDate = new Date(exp.start_date);
+    let endDate = new Date();
+    
+    if (exp.end_date && !exp.current) {
+      endDate = new Date(exp.end_date);
+    }
+    
+    // Calculate months between dates
+    const months = (endDate.getFullYear() - startDate.getFullYear()) * 12 + 
+                  (endDate.getMonth() - startDate.getMonth());
+    
+    // Add to total
+    totalMonths += Math.max(0, months);
+  });
+  
+  // Convert months to years (rounded to 1 decimal)
+  return Math.round(totalMonths / 12 * 10) / 10;
+}
+
+// Extract skills that are most likely relevant to the job description
+function extractRelevantSkills(skills: string[] | null, jobDescription: string): string[] {
+  if (!skills || !Array.isArray(skills) || skills.length === 0) {
+    return [];
+  }
+  
+  // Convert job description to lowercase for comparison
+  const lowercaseJD = jobDescription.toLowerCase();
+  
+  // Score each skill based on if it appears in the job description
+  const scoredSkills = skills.map(skill => {
+    const lowercaseSkill = skill.toLowerCase();
+    const appears = lowercaseJD.includes(lowercaseSkill);
+    return {
+      skill,
+      score: appears ? 1 : 0
+    };
+  });
+  
+  // Sort by score and return top skills
+  return scoredSkills
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 10)
+    .map(item => item.skill);
+}

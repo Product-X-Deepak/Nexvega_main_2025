@@ -1,1 +1,38 @@
+
 project_id = "kivpijajoxfbkmakykho"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "storage"]
+
+[db]
+port = 54322
+
+[studio]
+enabled = true
+port = 54323
+
+# Edge Functions
+[functions.ai-assistant]
+verify_jwt = true
+
+[functions.match-candidates]
+verify_jwt = true
+
+[functions.match-jobs]
+verify_jwt = true
+
+[functions.parse-resume]
+verify_jwt = true
+
+[functions.parse-resumes]
+verify_jwt = true
+
+[functions.generate-embeddings]
+verify_jwt = true
+
+# Storage
+[storage]
+enabled = true
+file_size_limit = "50MiB"

@@ -1,22 +1,31 @@
 
-import React from 'react';
-import { Search, PlusCircle, Upload } from 'lucide-react';
+import React, { useState } from 'react';
+import { Search, PlusCircle, Upload, CheckCircle } from 'lucide-react';
 import { Candidate } from '@/types';
 import CandidateCard from './CandidateCard';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 
 interface CandidatesListProps {
   loading: boolean;
   candidates: Candidate[];
   onAddCandidate: () => void;
   onUploadResumes: () => void;
+  selectedCandidates?: string[];
+  onSelectCandidate?: (candidateId: string, isSelected: boolean) => void;
+  onSelectAll?: (isSelected: boolean) => void;
+  showSelection?: boolean;
 }
 
 const CandidatesList: React.FC<CandidatesListProps> = ({
   loading,
   candidates,
   onAddCandidate,
-  onUploadResumes
+  onUploadResumes,
+  selectedCandidates = [],
+  onSelectCandidate = () => {},
+  onSelectAll = () => {},
+  showSelection = false
 }) => {
   if (loading) {
     return (
@@ -80,13 +89,42 @@ const CandidatesList: React.FC<CandidatesListProps> = ({
   }
   
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      {candidates.map((candidate) => (
-        <CandidateCard 
-          key={candidate.id} 
-          candidate={candidate} 
-        />
-      ))}
+    <div className="space-y-4">
+      {showSelection && (
+        <div className="mb-2 flex items-center gap-2">
+          <Checkbox 
+            checked={selectedCandidates.length === candidates.length && candidates.length > 0}
+            onCheckedChange={(checked) => onSelectAll(!!checked)}
+            id="select-all-candidates"
+          />
+          <label htmlFor="select-all-candidates" className="text-sm">
+            Select all {candidates.length} candidates
+          </label>
+        </div>
+      )}
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {candidates.map((candidate) => (
+          <div key={candidate.id} className="relative">
+            {showSelection && (
+              <div className="absolute left-2 top-2 z-10">
+                <Checkbox 
+                  checked={selectedCandidates.includes(candidate.id)}
+                  onCheckedChange={(checked) => onSelectCandidate(candidate.id, !!checked)}
+                />
+              </div>
+            )}
+            {selectedCandidates.includes(candidate.id) && (
+              <div className="absolute right-2 top-2 z-10">
+                <CheckCircle className="h-5 w-5 text-primary" />
+              </div>
+            )}
+            <div className={showSelection ? "pt-2 pl-8" : ""}>
+              <CandidateCard candidate={candidate} />
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 };

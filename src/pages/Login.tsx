@@ -1,26 +1,34 @@
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { useToast } from '@/hooks/use-toast';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
-import { Loader2, Lock, User, LogIn } from 'lucide-react';
-import { ThemeToggle } from '@/components/ui/theme-toggle';
-import { useNavigate } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { 
+  Card, 
+  CardContent, 
+  CardDescription, 
+  CardFooter, 
+  CardHeader, 
+  CardTitle 
+} from '@/components/ui/card';
+import { useToast } from '@/hooks/use-toast';
+import { Shield, AtSign, KeyRound, Loader2 } from 'lucide-react';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
+  const location = useLocation();
   const { signIn, user, userRole } = useAuth();
   const { toast } = useToast();
-  const navigate = useNavigate();
 
-  // If already logged in, redirect to appropriate dashboard
+  // Redirect if already authenticated
   useEffect(() => {
     if (user) {
+      // Redirect based on role
       if (userRole === 'client') {
         navigate('/client');
       } else {
@@ -31,145 +39,128 @@ export default function Login() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
-
+    
+    if (!email || !password) {
+      setError('Please enter both email and password');
+      return;
+    }
+    
+    setIsSubmitting(true);
+    setError(null);
+    
     try {
-      // Validate inputs
-      if (!email.trim() || !password.trim()) {
-        toast({
-          title: 'Input Error',
-          description: 'Email and password are required',
-          variant: 'destructive',
-        });
-        setIsLoading(false);
-        return;
-      }
-
-      const { error } = await signIn(email, password);
+      const { success, error } = await signIn(email, password);
       
-      if (error) {
+      if (!success) {
+        setError(error || 'Invalid login credentials');
         toast({
-          title: 'Authentication Error',
-          description: error,
-          variant: 'destructive',
+          title: "Login Failed",
+          description: error || 'Invalid login credentials',
+          variant: "destructive",
         });
-        return;
+      } else {
+        toast({
+          title: "Login Successful",
+          description: "Welcome back!",
+        });
       }
-
-      // Successful login is handled by the AuthContext which will redirect based on role
+    } catch (err) {
+      console.error('Login error:', err);
+      setError('An unexpected error occurred. Please try again.');
       toast({
-        title: 'Welcome back',
-        description: 'Authentication successful',
-      });
-    } catch (error) {
-      console.error('Login error:', error);
-      toast({
-        title: 'Error',
-        description: 'An unexpected error occurred during login',
-        variant: 'destructive',
+        title: "Error",
+        description: "An unexpected error occurred. Please try again.",
+        variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200 dark:from-gray-900 dark:to-gray-800 px-4 sm:px-6 lg:px-8">
-      <div className="absolute top-4 right-4">
-        <ThemeToggle />
-      </div>
-      <div className="max-w-md w-full">
-        <Card className="border shadow-xl">
-          <CardHeader className="space-y-4 flex flex-col items-center">
-            <div className="w-full flex justify-center">
-              <img
-                className="h-16 w-auto mb-3"
-                src="/logo.svg"
-                alt="NexVega ATS"
-              />
-            </div>
-            <CardTitle className="text-2xl font-bold text-center">NexVega Applicant Tracking System</CardTitle>
-            <CardDescription className="text-center">
-              Sign in to access your recruitment dashboard
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-muted/30 p-4">
+      <div className="w-full max-w-md">
+        <div className="text-center mb-8">
+          <div className="mx-auto w-16 h-16 bg-primary/10 flex items-center justify-center rounded-full mb-4">
+            <Shield className="h-8 w-8 text-primary" />
+          </div>
+          <h1 className="text-3xl font-bold">NexVega ATS</h1>
+          <p className="text-muted-foreground mt-2">
+            Sign in to access your applicant tracking system
+          </p>
+        </div>
+      
+        <Card className="border-border/40 shadow-lg">
+          <CardHeader>
+            <CardTitle>Sign In</CardTitle>
+            <CardDescription>
+              Enter your credentials to access your account
             </CardDescription>
           </CardHeader>
-          
-          <CardContent>
-            <form className="space-y-5" onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit}>
+            <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="email" className="text-sm font-medium">Email address</Label>
+                <label htmlFor="email" className="text-sm font-medium">
+                  Email
+                </label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <User className="h-4 w-4 text-gray-400" />
-                  </div>
+                  <AtSign className="absolute left-3 top-2.5 h-5 w-5 text-muted-foreground" />
                   <Input
                     id="email"
-                    name="email"
                     type="email"
-                    autoComplete="email"
-                    required
-                    placeholder="name@company.com"
+                    placeholder="your.email@example.com"
+                    className="pl-10"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="pl-10 w-full"
-                    disabled={isLoading}
+                    disabled={isSubmitting}
                   />
                 </div>
               </div>
               
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="password" className="text-sm font-medium">Password</Label>
+                <div className="flex justify-between">
+                  <label htmlFor="password" className="text-sm font-medium">
+                    Password
+                  </label>
                 </div>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Lock className="h-4 w-4 text-gray-400" />
-                  </div>
+                  <KeyRound className="absolute left-3 top-2.5 h-5 w-5 text-muted-foreground" />
                   <Input
                     id="password"
-                    name="password"
                     type="password"
-                    autoComplete="current-password"
-                    required
                     placeholder="••••••••"
+                    className="pl-10"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="pl-10 w-full"
-                    disabled={isLoading}
+                    disabled={isSubmitting}
                   />
                 </div>
               </div>
-
-              <Button
-                type="submit"
-                className="w-full font-medium flex items-center justify-center gap-2"
-                disabled={isLoading}
-              >
-                {isLoading ? (
+              
+              {error && (
+                <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md">
+                  {error}
+                </div>
+              )}
+            </CardContent>
+            
+            <CardFooter className="flex flex-col gap-4">
+              <Button type="submit" className="w-full" disabled={isSubmitting}>
+                {isSubmitting ? (
                   <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Signing in...
                   </>
                 ) : (
-                  <>
-                    <LogIn className="h-4 w-4" />
-                    Sign in
-                  </>
+                  "Sign In"
                 )}
               </Button>
-            </form>
-          </CardContent>
-          
-          <CardFooter>
-            <div className="w-full text-center space-y-2">
-              <p className="text-sm text-muted-foreground">
-                Contact your administrator if you need access or forgot your password.
+              
+              <p className="text-center text-sm text-muted-foreground">
+                Contact your administrator for login assistance or to create an account.
               </p>
-              <p className="text-xs text-muted-foreground">
-                NexVega - Secure enterprise-grade applicant tracking system
-              </p>
-            </div>
-          </CardFooter>
+            </CardFooter>
+          </form>
         </Card>
       </div>
     </div>
