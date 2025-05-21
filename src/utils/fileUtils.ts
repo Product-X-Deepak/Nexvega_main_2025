@@ -1,5 +1,7 @@
 
 // This file contains utility functions for extracting text from different file types
+import * as pdfjsLib from 'pdfjs-dist';
+import { GlobalWorkerOptions } from 'pdfjs-dist';
 
 /**
  * Extract text content from various file types (PDF, DOC, DOCX, TXT, CSV, etc.)
@@ -15,15 +17,13 @@ export async function extractTextFromFile(file: File): Promise<string> {
   // PDF files need PDF parsing library
   if (fileType === 'application/pdf') {
     try {
-      // Load PDF.js library
-      const pdfjs = await import('pdfjs-dist');
-      const pdfjsWorker = await import('pdfjs-dist/build/pdf.worker.entry');
-      
-      pdfjs.GlobalWorkerOptions.workerSrc = pdfjsWorker;
+      // Set up PDF.js worker
+      const pdfjsWorker = await import('pdfjs-dist/build/pdf.worker.mjs');
+      GlobalWorkerOptions.workerSrc = pdfjsWorker;
       
       // Load the PDF file
       const arrayBuffer = await file.arrayBuffer();
-      const pdf = await pdfjs.getDocument(new Uint8Array(arrayBuffer)).promise;
+      const pdf = await pdfjsLib.getDocument(new Uint8Array(arrayBuffer)).promise;
       
       let text = '';
       

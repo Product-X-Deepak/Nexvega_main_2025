@@ -260,3 +260,77 @@ export async function batchUpdatePipelineStage(candidateIds: string[], stage: st
     return false;
   }
 }
+
+// Save processed candidate to database
+export async function saveProcessedCandidate(candidateData: any): Promise<string | null> {
+  try {
+    // Generate embedding for the candidate
+    const resumeTextForEmbedding = `
+      ${candidateData.full_name || ''} 
+      ${candidateData.resume_summary || ''} 
+      ${candidateData.skills?.join(' ') || ''} 
+      ${candidateData.experience?.map((exp: any) => 
+        `${exp.title || ''} ${exp.company || ''} ${exp.responsibilities?.join(' ') || ''}`
+      ).join(' ') || ''}
+    `;
+    
+    // Prepare data for insertion
+    const dataToInsert = {
+      full_name: candidateData.full_name || null,
+      email: candidateData.email || null,
+      phone: candidateData.phone || null,
+      linkedin_url: candidateData.linkedin_url || null,
+      other_links: candidateData.other_links || [],
+      social_media: candidateData.social_media || {},
+      resume_summary: candidateData.resume_summary || null,
+      objective: candidateData.objective || null,
+      skills: candidateData.skills || [],
+      languages: candidateData.languages || [],
+      education: candidateData.education || [],
+      experience: candidateData.experience || [],
+      projects: candidateData.projects || [],
+      publications: candidateData.publications || [],
+      resume_id: candidateData.resumeId || null,
+      resume_url: candidateData.resumeUrl || null,
+      status: 'active' as CandidateStatus,
+      pipeline_stage: 'new_candidate' as PipelineStage,
+      created_by: candidateData.created_by,
+      updated_at: new Date().toISOString()
+    };
+    
+    // Insert the candidate data
+    const { data, error } = await supabase
+      .from('candidates')
+      .insert(dataToInsert)
+      .select();
+      
+    if (error) {
+      console.error('Error inserting candidate data:', error);
+      throw error;
+    }
+    
+    // Generate embedding asynchronously
+    if (resumeTextForEmbedding.trim().length > 10 && data?.[0]?.id) {
+      try {
+        const { error: embeddingError } = await supabase.functions.invoke('generate-embeddings', {
+          body: {
+            recordId: data[0].id,
+            recordType: 'candidate',
+            text: resumeTextForEmbedding
+          }
+        });
+        
+        if (embeddingError) {
+          console.error('Error generating embeddings:', embeddingError);
+        }
+      } catch (embeddingError) {
+        console.error('Error calling embedding function:', embeddingError);
+      }
+    }
+    
+    return data?.[0]?.id || null;
+  } catch (error) {
+    console.error('Error saving candidate:', error);
+    throw error;
+  }
+}

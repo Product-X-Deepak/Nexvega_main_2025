@@ -115,6 +115,8 @@ export interface Job {
   embedding?: number[];
 }
 
+export type NoteType = 'general' | 'interview' | 'feedback' | 'rejection' | 'other';
+
 export interface CandidateNote {
   id: string;
   candidate_id: string;
@@ -122,5 +124,19 @@ export interface CandidateNote {
   content: string;
   created_at: string;
   updated_at: string;
-  type: 'general' | 'interview' | 'feedback' | 'rejection' | 'other';
+  type: NoteType;
+  profiles?: {
+    full_name?: string;
+    email?: string;
+  };
+}
+
+export interface CandidateFilters {
+  status: CandidateStatus | null;
+  pipeline_stage: PipelineStage | null;
+  skills: string[] | null;
+  experience_years: number | null;
+  education_level: string | null;
+  location: string | null;
+  languages: string[] | null;
 }

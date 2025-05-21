@@ -1,5 +1,5 @@
 
-import { Candidate, Client, Job, CandidateNote } from '@/types';
+import { Candidate, Client, Job, CandidateNote, PipelineStage, CandidateStatus } from '@/types';
 
 /**
  * Helper function to properly convert database objects to typed Candidate objects
@@ -60,4 +60,43 @@ export function convertToCandidateNotes(data: any[]): CandidateNote[] {
     };
     return note;
   });
+}
+
+/**
+ * Helper function to convert a single database object to a typed Candidate object
+ */
+export function convertToCandidate(item: any): Candidate {
+  // Ensure each complex object is properly typed
+  const candidate: Candidate = {
+    ...item,
+    education: Array.isArray(item.education) ? item.education : [],
+    experience: Array.isArray(item.experience) ? item.experience : [],
+    projects: Array.isArray(item.projects) ? item.projects : [],
+    publications: Array.isArray(item.publications) ? item.publications : [],
+    skills: Array.isArray(item.skills) ? item.skills : [],
+    languages: Array.isArray(item.languages) ? item.languages : [],
+    assigned_to_clients: Array.isArray(item.assigned_to_clients) ? item.assigned_to_clients : [],
+    liked_by_clients: Array.isArray(item.liked_by_clients) ? item.liked_by_clients : []
+  };
+  return candidate;
+}
+
+/**
+ * Validate if the given value is a valid PipelineStage
+ */
+export function validatePipelineStage(value: string): PipelineStage {
+  const validStages: PipelineStage[] = ['new_candidate', 'screening', 'interview', 'offer', 'hired', 'rejected'];
+  return validStages.includes(value as PipelineStage) 
+    ? value as PipelineStage 
+    : 'new_candidate';
+}
+
+/**
+ * Validate if the given value is a valid CandidateStatus
+ */
+export function validateCandidateStatus(value: string): CandidateStatus {
+  const validStatuses: CandidateStatus[] = ['active', 'inactive', 'blocked', 'unavailable'];
+  return validStatuses.includes(value as CandidateStatus)
+    ? value as CandidateStatus
+    : 'active';
 }

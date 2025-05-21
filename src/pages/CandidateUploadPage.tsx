@@ -11,6 +11,7 @@ import {
   processMultipleResumes, 
   saveProcessedCandidate 
 } from '@/services/resumeService';
+import { extractTextFromFile } from '@/utils/fileUtils';
 import { Progress } from '@/components/ui/progress';
 import { Loader2, Upload, File, AlertTriangle, CheckCircle, Trash2 } from 'lucide-react';
 
