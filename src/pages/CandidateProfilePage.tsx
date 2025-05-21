@@ -238,19 +238,10 @@ export default function CandidateProfilePage() {
         
       if (error) throw error;
       
-      // Make sure we have the correct type
-      const newNoteWithCorrectType: CandidateNote = {
-        id: data[0].id,
-        candidate_id: data[0].candidate_id,
-        user_id: data[0].user_id,
-        content: data[0].content,
-        type: data[0].type,
-        created_at: data[0].created_at,
-        updated_at: data[0].updated_at,
-        profiles: data[0].profiles
-      };
+      // Convert the note to the correct type
+      const convertedNotes = convertToCandidateNotes(data);
       
-      setNotes(prev => [newNoteWithCorrectType, ...prev]);
+      setNotes(prev => [...convertedNotes, ...prev]);
       
       toast({
         title: 'Note added',
