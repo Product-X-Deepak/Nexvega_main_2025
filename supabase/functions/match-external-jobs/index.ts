@@ -19,6 +19,29 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Cosine similarity function
+function calculateCosineSimilarity(vecA: number[], vecB: number[]): number {
+  if (!vecA || !vecB || vecA.length !== vecB.length) {
+    return 0;
+  }
+
+  let dotProduct = 0;
+  let normA = 0;
+  let normB = 0;
+
+  for (let i = 0; i < vecA.length; i++) {
+    dotProduct += vecA[i] * vecB[i];
+    normA += vecA[i] * vecA[i];
+    normB += vecB[i] * vecB[i];
+  }
+
+  if (normA === 0 || normB === 0) {
+    return 0;
+  }
+
+  return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
@@ -85,13 +108,29 @@ serve(async (req) => {
 
     const analysisResult = matchAnalysis.choices[0].message.content;
 
-    // Calculate similarity score using the candidate's embedding if available
+    // Calculate similarity score using the candidate's embedding
     let similarityScore = null;
-    if (candidateData.embedding) {
-      // We would calculate similarity here, but for now we'll just use a placeholder
-      // In a real implementation, we would use vector similarity functions
-      similarityScore = 0.85; // Placeholder score
+    if (candidateData.embedding && jobEmbedding) {
+      similarityScore = calculateCosineSimilarity(candidateData.embedding, jobEmbedding);
+      // Scale to 0-100 range for better readability
+      similarityScore = Math.round(similarityScore * 100);
     }
+
+    // Generate skill match breakdown
+    const candidateSkills = candidateData.skills || [];
+    const jobRequirements = externalJobData.requirements || [];
+    
+    const matchedSkills = candidateSkills.filter(skill => 
+      jobRequirements.some(req => 
+        req.toLowerCase().includes(skill.toLowerCase())
+      )
+    );
+    
+    const missingSkills = jobRequirements.filter(req => 
+      !candidateSkills.some(skill => 
+        req.toLowerCase().includes(skill.toLowerCase())
+      )
+    );
 
     return new Response(
       JSON.stringify({
@@ -99,11 +138,14 @@ serve(async (req) => {
         data: {
           match_analysis: analysisResult,
           similarity_score: similarityScore,
+          matched_skills: matchedSkills,
+          missing_skills: missingSkills,
           external_job: externalJobData,
           candidate: {
             id: candidateData.id,
             full_name: candidateData.full_name,
-            skills: candidateData.skills
+            skills: candidateData.skills,
+            experience: candidateData.experience
           }
         }
       }),
