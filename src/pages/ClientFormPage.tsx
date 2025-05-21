@@ -65,7 +65,7 @@ export default function ClientFormPage() {
     }
   };
   
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
@@ -85,9 +85,20 @@ export default function ClientFormPage() {
         return;
       }
       
+      // Ensure required fields are present
       const clientData = {
-        ...formData,
-        ...(isEdit ? { updated_at: new Date().toISOString() } : { created_by: user?.id, created_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        company_name: formData.company_name,
+        contact_person: formData.contact_person,
+        email: formData.email,
+        phone: formData.phone || null,
+        address: formData.address || null,
+        industry: formData.industry || null,
+        status: formData.status || 'active',
+        ...(isEdit ? { updated_at: new Date().toISOString() } : { 
+          created_by: user?.id, 
+          created_at: new Date().toISOString(), 
+          updated_at: new Date().toISOString() 
+        })
       };
       
       let response;
@@ -224,7 +235,7 @@ export default function ClientFormPage() {
                     id="status"
                     name="status"
                     value={formData.status}
-                    onChange={handleChange as React.ChangeEventHandler<HTMLSelectElement>}
+                    onChange={handleChange}
                     className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <option value="active">Active</option>
