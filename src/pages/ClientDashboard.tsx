@@ -125,7 +125,7 @@ export default function ClientDashboard() {
     <ClientLayout>
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold">Welcome, {user?.full_name}</h1>
+          <h1 className="text-2xl font-bold">Welcome, {user?.email}</h1>
           <p className="text-gray-500 dark:text-gray-400">Here's your candidate pipeline</p>
         </div>
 

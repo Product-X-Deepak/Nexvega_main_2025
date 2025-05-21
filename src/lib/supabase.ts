@@ -1,15 +1,16 @@
-import { supabase as supabaseClient } from '@/integrations/supabase/client';
+
 import { createClient } from '@supabase/supabase-js';
 
 // These environment variables must be set in deployment environment
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+const supabaseUrl = 'https://kivpijajoxfbkmakykho.supabase.co';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtpdnBpamFqb3hmYmttYWt5a2hvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc3Njc3MzgsImV4cCI6MjA2MzM0MzczOH0.1WzPEFh0rzg4QntxZfWiGSicrJqij7S1WGdm6CWtgqk';
 
-if (!supabaseUrl || !supabaseKey) {
-  console.error('Missing Supabase environment variables. Please check your configuration.');
-}
-
-export const supabase = supabaseClient;
+export const supabase = createClient(supabaseUrl, supabaseKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+  }
+});
 
 // Types for our database schema
 export type UserRole = 'admin' | 'staff' | 'client';

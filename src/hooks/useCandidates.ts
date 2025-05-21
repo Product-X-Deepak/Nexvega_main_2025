@@ -1,15 +1,15 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { Candidate, PipelineStage } from '@/types';
+import { Candidate, PipelineStage, CandidateStatus } from '@/types';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { convertToCandidates } from '@/utils/typeHelpers';
 
 interface CandidateFilters {
-  status?: string;
+  status?: CandidateStatus;
   skills?: string[];
-  pipelineStage?: string;
+  pipelineStage?: PipelineStage;
   minExperience?: number;
   maxExperience?: number;
   location?: string;
@@ -52,11 +52,11 @@ export function useCandidates() {
       
       // Apply filters based on active tab
       if (activeTab === 'active') {
-        query = query.eq('status', 'active');
+        query = query.eq('status', 'active' as CandidateStatus);
       } else if (activeTab === 'inactive') {
-        query = query.eq('status', 'inactive');
+        query = query.eq('status', 'inactive' as CandidateStatus);
       } else if (activeTab === 'pipeline') {
-        query = query.not('pipeline_stage', 'eq', 'new_candidate');
+        query = query.not('pipeline_stage', 'eq', 'new_candidate' as PipelineStage);
       }
       
       // Apply additional filters
